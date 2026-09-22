@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DeshiA",
+  "version": "0.1.0",
+  "identifier": "com.mehedihasan.deshia",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../.next/standalone"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "DeshiA — Deshi Annotation",
+        "width": 1600,
+        "height": 1000,
+        "minWidth": 1100,
+        "minHeight": 720,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Image annotation workstation for computer vision research",
+    "longDescription": "DeshiA (Deshi Annotation) is an extensible, schema-driven image annotation workstation for structured computer vision dataset creation, hierarchical labeling, bounding-box annotation, persistent progress, crash recovery, and reproducible dataset export."
+  },
+  "plugins": {
+    "dialog": {},
+    "fs": {}
+  }
+}

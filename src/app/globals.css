@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * DeshiA design tokens.
+ * Single source of truth for all interface colors. Component code references
+ * these via Tailwind semantic classes (bg-surface, text-muted, ...) — never
+ * raw hex. The annotation box palette is separate (see core/annotation/palette).
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Dark theme (default) */
+  --bg: #0b0d10;
+  --surface: #11151a;
+  --elevated: #171c22;
+  --border: #252b33;
+  --border-strong: #343b45;
+  --text: #f5f7fa;
+  --text-secondary: #b1bac4;
+  --muted: #7d8792;
+  --primary: #4da3ff;
+  --primary-hover: #69b1ff;
+  --primary-fg: #05080c;
+  --success: #32d583;
+  --warning: #f5b942;
+  --error: #f04438;
+  --ring: #4da3ff;
+
+  --radius: 10px;
+}
+
+.light {
+  color-scheme: light;
+
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --elevated: #ffffff;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --text: #111827;
+  --text-secondary: #4b5563;
+  --muted: #6b7280;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-fg: #ffffff;
+  --success: #059669;
+  --warning: #d97706;
+  --error: #dc2626;
+  --ring: #2563eb;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Focus ring: visible, professional, never removed for accessibility. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 30%, transparent);
+  }
+
+  /* Thin technical scrollbars. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /* Technical metadata rows share this treatment across panels. */
+  .metric-label {
+    @apply text-meta font-medium uppercase tracking-wider text-muted;
+  }
+
+  .hairline {
+    @apply border-border;
+  }
+}
