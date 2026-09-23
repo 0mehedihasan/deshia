@@ -1,0 +1,7 @@
+# Rust build artifacts
+/target/
+
+# Staged by scripts/build-desktop.mjs for `tauri build` (regenerated each build)
+/resources/
+/binaries/
+/.stage/

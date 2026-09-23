@@ -19,17 +19,18 @@ export function isTauri(): boolean {
 }
 
 /**
- * Open a native folder picker. Returns the selected absolute path, or null if
- * the user cancelled or no native picker is available (browser dev).
+ * Open a native folder picker. Returns the selected absolute path, or `null` if
+ * the user cancelled OR there is no native runtime (a plain browser) — callers
+ * should fall back to manual path entry in that case.
+ *
+ * If a native picker IS present but the call fails (e.g. a missing Tauri
+ * `dialog` capability), this throws so the failure is surfaced to the user
+ * instead of silently doing nothing — silent failure is exactly what makes
+ * "Browse doesn't work" impossible to diagnose.
  */
 export async function selectDirectory(title?: string): Promise<string | null> {
   if (!isTauri()) return null;
-  try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const selected = await open({ directory: true, multiple: false, title });
-    if (typeof selected === 'string') return selected;
-    return null;
-  } catch {
-    return null;
-  }
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const selected = await open({ directory: true, multiple: false, title });
+  return typeof selected === 'string' ? selected : null;
 }

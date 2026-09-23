@@ -175,9 +175,14 @@ export function AnnotationWorkbench({
     if (store.autosave !== 'dirty') return;
     const handle = setTimeout(async () => {
       store.markSaving();
-      const res = await saveDraftAction(buildPayload());
-      if (res.ok) store.markSaved(res.savedAt);
-      else store.markError(res.error);
+      try {
+        const res = await saveDraftAction(buildPayload());
+        if (res.ok) store.markSaved(res.savedAt);
+        else store.markError(res.error);
+      } catch (err) {
+        // A rejected server action must never leave the UI stuck on "Saving…".
+        store.markError(err instanceof Error ? err.message : 'Autosave failed unexpectedly.');
+      }
     }, 800);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -186,9 +191,13 @@ export function AnnotationWorkbench({
   const saveNow = async () => {
     if (!draft) return;
     store.markSaving();
-    const res = await saveDraftAction(buildPayload());
-    if (res.ok) store.markSaved(res.savedAt);
-    else store.markError(res.error);
+    try {
+      const res = await saveDraftAction(buildPayload());
+      if (res.ok) store.markSaved(res.savedAt);
+      else store.markError(res.error);
+    } catch (err) {
+      store.markError(err instanceof Error ? err.message : 'Save failed unexpectedly.');
+    }
   };
 
   const goToNext = (nextImageId: string | null) => {
@@ -200,19 +209,29 @@ export function AnnotationWorkbench({
     if (!draft) return;
     setBusy('submit');
     setSubmitErrors([]);
-    const res = await submitImageAction(buildPayload());
-    setBusy(null);
-    if (res.ok) goToNext(res.nextImageId);
-    else setSubmitErrors(res.errors);
+    try {
+      const res = await submitImageAction(buildPayload());
+      if (res.ok) goToNext(res.nextImageId);
+      else setSubmitErrors(res.errors);
+    } catch (err) {
+      setSubmitErrors([err instanceof Error ? err.message : 'Submit failed unexpectedly.']);
+    } finally {
+      setBusy(null);
+    }
   };
 
   const skip = async () => {
     if (!image) return;
     setBusy('skip');
-    const res = await skipImageAction(workspaceId, image.id);
-    setBusy(null);
-    if (res.ok) goToNext(res.nextImageId);
-    else setSubmitErrors([res.error ?? 'Could not skip image.']);
+    try {
+      const res = await skipImageAction(workspaceId, image.id);
+      if (res.ok) goToNext(res.nextImageId);
+      else setSubmitErrors([res.error ?? 'Could not skip image.']);
+    } catch (err) {
+      setSubmitErrors([err instanceof Error ? err.message : 'Skip failed unexpectedly.']);
+    } finally {
+      setBusy(null);
+    }
   };
 
   const armDraw = (componentKey: string) => {

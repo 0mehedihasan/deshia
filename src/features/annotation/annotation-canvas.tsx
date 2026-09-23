@@ -113,17 +113,28 @@ export function AnnotationCanvas(props: AnnotationCanvasProps) {
   );
 
   const onStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    // Only begin a draw when a component is armed and the click is on empty
-    // canvas / the image (not an existing box).
-    const targetName = e.target.name();
-    if (!activeComponentKey) {
-      if (targetName !== 'box') props.onSelectBox(null);
+    const stage = e.target.getStage();
+    // "Empty area" = the bare stage background or the source image itself.
+    // A box (name "box") or a Transformer resize handle is NOT empty area, and
+    // must never clear the selection: deselecting mid-gesture unmounts the
+    // Transformer and aborts the very move/resize the user just started (this
+    // was the "can't move / resize a box" bug).
+    const isEmptyArea = e.target === stage || e.target.name() === 'bg';
+
+    if (activeComponentKey) {
+      // Armed to draw: only begin a rubber-band from empty canvas / the image,
+      // never on top of an existing box or its handles.
+      if (!isEmptyArea) return;
+      const pos = stage?.getPointerPosition();
+      if (!pos) return;
+      setDraft({ x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y });
       return;
     }
-    if (targetName === 'box') return;
-    const pos = e.target.getStage()?.getPointerPosition();
-    if (!pos) return;
-    setDraft({ x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y });
+
+    // Not drawing: clicking empty area clears the selection. Clicks on a box
+    // (selected via its own handler) or a Transformer anchor are left alone so
+    // the drag/resize gesture can proceed.
+    if (isEmptyArea) props.onSelectBox(null);
   };
 
   const onStageMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -154,6 +165,15 @@ export function AnnotationCanvas(props: AnnotationCanvasProps) {
       }
     : null;
 
+  // Draw the selected box last so it (and its Transformer handles) sits on top
+  // of any overlapping boxes and stays grabbable for move/resize.
+  const orderedBoxes = React.useMemo(() => {
+    if (!selectedBoxId) return boxes;
+    const selected = boxes.find((b) => b.id === selectedBoxId);
+    if (!selected) return boxes;
+    return [...boxes.filter((b) => b.id !== selectedBoxId), selected];
+  }, [boxes, selectedBoxId]);
+
   return (
     <div
       ref={containerRef}
@@ -169,10 +189,19 @@ export function AnnotationCanvas(props: AnnotationCanvasProps) {
           onMouseUp={onStageMouseUp}
         >
           <Layer>
-            {img && <KonvaImage image={img} x={fit.offsetX} y={fit.offsetY} width={pxW} height={pxH} />}
+            {img && (
+              <KonvaImage
+                image={img}
+                name="bg"
+                x={fit.offsetX}
+                y={fit.offsetY}
+                width={pxW}
+                height={pxH}
+              />
+            )}
           </Layer>
           <Layer>
-            {boxes.map((b) => (
+            {orderedBoxes.map((b) => (
               <BoxShape
                 key={b.id}
                 box={b}

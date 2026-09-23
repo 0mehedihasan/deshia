@@ -6,12 +6,13 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "pnpm build",
-    "frontendDist": "../.next/standalone"
+    "beforeBuildCommand": "node scripts/build-desktop.mjs",
+    "frontendDist": "./loading"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "DeshiA — Deshi Annotation",
         "width": 1600,
         "height": 1000,
@@ -37,12 +38,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "externalBin": ["binaries/node"],
+    "resources": {
+      "resources/app.tar": "app.tar"
+    },
     "category": "DeveloperTool",
     "shortDescription": "Image annotation workstation for computer vision research",
     "longDescription": "DeshiA (Deshi Annotation) is an extensible, schema-driven image annotation workstation for structured computer vision dataset creation, hierarchical labeling, bounding-box annotation, persistent progress, crash recovery, and reproducible dataset export."
   },
-  "plugins": {
-    "dialog": {},
-    "fs": {}
-  }
+  "plugins": {}
 }

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { ensureDatabaseReady } from '@/db/bootstrap';
 import { workspaceRepo } from '@/db/repositories';
 import { getBuiltInSchema, RICKSHAW_SCHEMA } from '@/schemas';
+import { ensureWorkspaceOutputScaffold } from '@/core/exporter/output-tree';
 
 /**
  * Workspace application service (server actions).
@@ -57,6 +58,19 @@ export async function createWorkspaceAction(
   }
 
   const schema = getBuiltInSchema(input.schemaId ?? RICKSHAW_SCHEMA.id) ?? RICKSHAW_SCHEMA;
+
+  // Auto-create the DeshiA_Output tree now so the target layout is visible in
+  // the chosen folder immediately (CLAUDE.md §10) — not only after the first
+  // export. If we cannot write here, fail before creating the workspace row so
+  // the user gets an actionable error instead of a broken workspace.
+  try {
+    await ensureWorkspaceOutputScaffold(outputDir, schema);
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Could not create the output folder structure under:\n${outputDir}\n\n${(err as Error).message}`,
+    };
+  }
 
   try {
     const ws = workspaceRepo.createWorkspace({

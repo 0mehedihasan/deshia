@@ -35,10 +35,10 @@ export interface DraftPayload {
 export type SaveDraftResult = { ok: true; savedAt: number } | { ok: false; error: string };
 
 export async function saveDraftAction(payload: DraftPayload): Promise<SaveDraftResult> {
-  ensureDatabaseReady();
-  const ws = workspaceRepo.getWorkspace(payload.workspaceId);
-  if (!ws) return { ok: false, error: 'Workspace not found.' };
   try {
+    ensureDatabaseReady();
+    const ws = workspaceRepo.getWorkspace(payload.workspaceId);
+    if (!ws) return { ok: false, error: 'Workspace not found.' };
     annotationRepo.saveDraft({
       imageId: payload.imageId,
       workspaceId: payload.workspaceId,
@@ -51,7 +51,8 @@ export async function saveDraftAction(payload: DraftPayload): Promise<SaveDraftR
     });
     return { ok: true, savedAt: Date.now() };
   } catch (err) {
-    // Draft is preserved in memory by the client; surface the failure.
+    // Draft is preserved in memory by the client; surface the failure instead
+    // of letting the promise reject (which would freeze the autosave UI).
     return { ok: false, error: (err as Error).message };
   }
 }
@@ -147,10 +148,10 @@ export async function skipImageAction(
   workspaceId: string,
   imageId: string,
 ): Promise<{ ok: boolean; nextImageId: string | null; error?: string }> {
-  ensureDatabaseReady();
-  const image = imageRepo.getImage(imageId);
-  if (!image) return { ok: false, nextImageId: null, error: 'Image not found.' };
   try {
+    ensureDatabaseReady();
+    const image = imageRepo.getImage(imageId);
+    if (!image) return { ok: false, nextImageId: null, error: 'Image not found.' };
     imageRepo.setImageStatus(imageId, 'SKIPPED');
     eventRepo.appendEvent({ imageId, kind: 'SKIPPED', payload: {} });
     revalidatePath(`/workspace/${workspaceId}`);

@@ -44,11 +44,45 @@ dialogs fall back to a path input when `DESHIA_E2E=1` or when not inside Tauri
 
 ### Packaged
 
-`next build` produces a standalone server (`output: 'standalone'`). The packaged
-desktop app runs that Node server as a **sidecar** and points the webview at it.
-Wiring the sidecar (`externalBin` + a bundled Node) is the remaining packaging
-task; `tauri.conf.json` is prepared for it. Until then, `pnpm tauri:dev` is the
-supported way to run the full desktop experience.
+`next build` produces a standalone Node server (`output: 'standalone'`). The
+packaged app ships that server as a single tarball, extracts it to a writable
+per-user dir on first launch, runs it as a child process, and points the webview
+at it — implemented as follows:
+
+```
+pnpm tauri:build
+  └─ beforeBuildCommand: node scripts/build-desktop.mjs
+       ├─ next build → .next/standalone
+       ├─ stage .stage/server      (standalone + .next/static + public, symlinks resolved)
+       ├─ stage .stage/migrations  (Drizzle SQL + meta/_journal.json)
+       ├─ pack → src-tauri/resources/app.tar   (single opaque resource)
+       └─ copy Node binary → src-tauri/binaries/node-<target-triple>  (externalBin)
+  └─ Rust shell (src-tauri/src/lib.rs), release only:
+       ├─ extract app.tar → <app_data_dir>/runtime/{server,migrations}
+       │     (skipped when a .deshia-version marker matches CARGO_PKG_VERSION)
+       ├─ pick a free loopback port
+       ├─ spawn bundled node server.js  (cwd = runtime/server/)
+       │     env: PORT, HOSTNAME=127.0.0.1, NODE_ENV=production,
+       │          DESHIA_DB_PATH=<app_data_dir>/deshia.db,
+       │          DESHIA_MIGRATIONS_DIR=<app_data_dir>/runtime/migrations
+       ├─ wait for the port, then navigate the window to http://127.0.0.1:PORT
+       └─ kill the child on RunEvent::Exit
+```
+
+We ship a **tarball** rather than directory resources for two reasons: Tauri's
+resource globbing skips dotfiles (a bare `.next/` dir would be silently dropped),
+and `.app/Contents/Resources` is read-only whereas Next wants to write
+`.next/cache` at runtime — extracting to `<app_data_dir>/runtime/` sidesteps both.
+Startup progress and any failure are written to `<app_data_dir>/deshia-launch.log`.
+
+Build UI shows `src-tauri/loading/index.html` (`frontendDist`) until the server
+is live. In debug (`tauri dev`) nothing is spawned — the window loads `devUrl`
+(`pnpm dev` on :3000). The `default` capability grants `remote.urls`
+(`http://127.0.0.1:*`) so native dialog/fs IPC works from the loopback origin.
+`src-tauri/resources/`, `src-tauri/binaries/`, and `src-tauri/.stage/` are build
+artifacts (git-ignored) and must be produced on the target OS — `tauri build`
+cannot cross-compile the bundled Node binary or the native
+`better-sqlite3`/`sharp` addons.
 
 ## Module responsibilities
 

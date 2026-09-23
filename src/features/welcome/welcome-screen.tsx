@@ -24,6 +24,7 @@ function PathField(props: {
   label: string;
   value: string;
   placeholder: string;
+  nativeBrowse: boolean;
   onChange: (v: string) => void;
   onBrowse: () => void;
 }) {
@@ -38,7 +39,17 @@ function PathField(props: {
           spellCheck={false}
           className="h-9 flex-1 rounded border border-border-strong bg-bg px-3 font-mono text-meta-lg text-text placeholder:text-muted focus:border-primary focus:outline-none"
         />
-        <Button variant="secondary" size="md" onClick={props.onBrowse} title="Browse for a folder">
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={props.onBrowse}
+          disabled={!props.nativeBrowse}
+          title={
+            props.nativeBrowse
+              ? 'Browse for a folder'
+              : 'The native folder picker is only available in the DeshiA desktop app. In a browser, type or paste an absolute path.'
+          }
+        >
           <FolderOpen size={15} />
           Browse
         </Button>
@@ -55,9 +66,28 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
 
+  // `isTauri()` depends on `window`, so it is only correct on the client. Read
+  // it after mount (never during SSR/first render) to avoid a hydration
+  // mismatch, and to keep the Browse button and the browser hint consistent.
+  const [nativeBrowse, setNativeBrowse] = React.useState(false);
+  React.useEffect(() => {
+    setNativeBrowse(isTauri());
+  }, []);
+
   const browse = async (setter: (v: string) => void, title: string) => {
-    const picked = await selectDirectory(title);
-    if (picked) setter(picked);
+    try {
+      const picked = await selectDirectory(title);
+      if (picked) setter(picked);
+    } catch (e) {
+      // selectDirectory throws only when a native picker IS present but the
+      // call fails (e.g. a missing Tauri `dialog` capability). Surface it
+      // instead of silently doing nothing.
+      setError(
+        `Could not open the folder picker: ${
+          e instanceof Error ? e.message : String(e)
+        }\nYou can type or paste an absolute path instead.`,
+      );
+    }
   };
 
   const submit = () => {
@@ -112,6 +142,7 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
               label="Source image folder (read-only)"
               value={sourceDir}
               placeholder="/path/to/source/images"
+              nativeBrowse={nativeBrowse}
               onChange={setSourceDir}
               onBrowse={() => void browse(setSourceDir, 'Select source image folder')}
             />
@@ -119,11 +150,12 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
               label="Output folder (DeshiA_Output is created here)"
               value={outputDir}
               placeholder="/path/to/output"
+              nativeBrowse={nativeBrowse}
               onChange={setOutputDir}
               onBrowse={() => void browse(setOutputDir, 'Select output folder')}
             />
 
-            {!isTauri() && (
+            {!nativeBrowse && (
               <p className="text-meta text-muted">
                 Running in a browser — type absolute folder paths. The native picker is available in
                 the desktop app.

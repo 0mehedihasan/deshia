@@ -1,8 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capability for the DeshiA main window: native folder dialogs and scoped filesystem read for scanning.",
+  "description": "Default capability for the DeshiA main window: native folder dialogs and scoped filesystem read for scanning. In a packaged build the UI is served from the bundled Node server on loopback, so `remote.urls` grants that origin the same permissions as the app origin.",
   "windows": ["main"],
+  "remote": {
+    "urls": ["http://localhost:*", "http://127.0.0.1:*"]
+  },
   "permissions": [
     "core:default",
     "dialog:default",
