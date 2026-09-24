@@ -3,6 +3,7 @@
 import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { Badge } from '@/components/ui/badge';
 import { WorkspaceTopBar } from '@/components/workspace-top-bar';
+import { AppFooter } from '@/components/app-footer';
 
 interface ComponentSummary {
   key: string;
@@ -45,7 +46,13 @@ function boxTone(box: ComponentSummary['box']) {
   return box === 'required' ? 'primary' : box === 'optional' ? 'muted' : 'neutral';
 }
 
-export function Settings({ workspace, schema }: { workspace: WorkspaceInfo; schema: SchemaSummary | null }) {
+export function Settings({
+  workspace,
+  schema,
+}: {
+  workspace: WorkspaceInfo;
+  schema: SchemaSummary | null;
+}) {
   return (
     <div className="flex min-h-screen flex-col bg-bg">
       <WorkspaceTopBar workspaceId={workspace.id} name={workspace.name} active="settings" />
@@ -91,9 +98,10 @@ export function Settings({ workspace, schema }: { workspace: WorkspaceInfo; sche
               Every submission writes all three formats side by side under{' '}
               <span className="font-mono">ANNOTATED/&lt;class&gt;/&lt;view&gt;/annotations/</span>:
               a Pascal VOC <span className="font-mono">.xml</span>, a self-contained COCO{' '}
-              <span className="font-mono">.json</span>, and a YOLO <span className="font-mono">.txt</span>.
-              A dataset-level <span className="font-mono">classes.txt</span> (YOLO class ids) is kept at
-              the <span className="font-mono">ANNOTATED/</span> root, consistent across every folder.
+              <span className="font-mono">.json</span>, and a YOLO{' '}
+              <span className="font-mono">.txt</span>. A dataset-level{' '}
+              <span className="font-mono">classes.txt</span> (YOLO class ids) is kept at the{' '}
+              <span className="font-mono">ANNOTATED/</span> root, consistent across every folder.
             </p>
           </PanelBody>
         </Panel>
@@ -105,7 +113,9 @@ export function Settings({ workspace, schema }: { workspace: WorkspaceInfo; sche
               <span className="text-meta text-muted">{schema.classes.length} classes</span>
             </PanelHeader>
             <PanelBody className="space-y-5">
-              {schema.description && <p className="text-body text-text-secondary">{schema.description}</p>}
+              {schema.description && (
+                <p className="text-body text-text-secondary">{schema.description}</p>
+              )}
               {schema.classes.map((c) => (
                 <div key={c.key} className="space-y-3">
                   <h3 className="text-body-lg font-semibold text-text">
@@ -121,7 +131,9 @@ export function Settings({ workspace, schema }: { workspace: WorkspaceInfo; sche
                         <ul className="space-y-1.5">
                           {v.components.map((cp) => (
                             <li key={cp.key} className="flex items-center justify-between gap-2">
-                              <span className="truncate text-meta-lg text-text-secondary">{cp.label}</span>
+                              <span className="truncate text-meta-lg text-text-secondary">
+                                {cp.label}
+                              </span>
                               <Badge tone={boxTone(cp.box)} mono>
                                 {cp.box}
                               </Badge>
@@ -137,6 +149,8 @@ export function Settings({ workspace, schema }: { workspace: WorkspaceInfo; sche
           </Panel>
         )}
       </main>
+
+      <AppFooter />
     </div>
   );
 }

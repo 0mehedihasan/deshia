@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/status-badge';
 import { WorkspaceTopBar } from '@/components/workspace-top-bar';
+import { AppFooter } from '@/components/app-footer';
 import { useAnnotationStore, type AutosaveStatus } from '@/stores/annotation';
 import {
   colorsForView,
@@ -325,6 +326,7 @@ export function AnnotationWorkbench({
             </Button>
           </div>
         </div>
+        <AppFooter compact />
       </div>
     );
   }
@@ -692,6 +694,7 @@ export function AnnotationWorkbench({
           </Button>
         </div>
       </div>
+      <AppFooter compact />
     </div>
   );
 }

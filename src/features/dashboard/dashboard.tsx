@@ -8,6 +8,7 @@ import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/status-badge';
 import { WorkspaceTopBar } from '@/components/workspace-top-bar';
+import { AppFooter } from '@/components/app-footer';
 import { formatBytes, formatPercent } from '@/lib/utils';
 import {
   scanAndImportAction,
@@ -270,6 +271,8 @@ export function Dashboard({
           </PanelBody>
         </Panel>
       </main>
+
+      <AppFooter />
     </div>
   );
 }

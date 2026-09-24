@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { DeshiaLogo } from '@/components/deshia-logo';
+import { AppFooter } from '@/components/app-footer';
 import { selectDirectory, isTauri } from '@/lib/native-dialog';
 import {
   createWorkspaceAction,
@@ -344,6 +345,8 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
           </PanelBody>
         </Panel>
       </div>
+
+      <AppFooter />
 
       {renameTarget && (
         <Overlay label="Rename workspace" onClose={busy ? () => {} : closeModals}>
