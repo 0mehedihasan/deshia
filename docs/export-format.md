@@ -185,20 +185,25 @@ For every submitted image DeshiA also renders a **box-annotated preview** to
 **only** output with boxes drawn — `RAW` and `ANNOTATED` images always stay
 clean (CLAUDE.md §10), so the dataset itself is never contaminated with overlays.
 
-The preview is produced by compositing an SVG overlay (sized to the image) onto
-a Sharp copy of the source — the source is only read, never modified. Each
-exported object (every box whose component is not `NOT_VISIBLE`) is drawn as:
+The preview is produced by compositing plain **RGBA raster tiles** onto a Sharp
+copy of the source — the source is only read, never modified. Each exported
+object (every box whose component is not `NOT_VISIBLE`) is drawn as:
 
-- a rectangle with the component's **border color** and a highly transparent
-  (~10%) same-hue fill, so the underlying image stays visible; and
-- a small label chip (component label on a darker translucent background) in the
-  same color.
+- one highly transparent (~10%) interior fill in the component's color, so the
+  underlying image stays clearly visible; and
+- four opaque border strips (top/bottom/left/right) in the same color, forming
+  the box outline.
 
-Colors and labels come from the **same deterministic palette and schema** the
-annotation workbench uses (`colorsForView` / `getComponent`), keyed by component
+This deliberately avoids SVG/text rasterization (the native librsvg/pango code
+path): a box preview does not need it, and feeding an SVG overlay to `composite`
+can crash some libvips builds. Consequently the raster preview draws **no text
+label** — the component label is still carried through the pipeline (`VizObject`)
+for a possible future overlay. Colors come from the **same deterministic palette
+and schema** the annotation workbench uses (`colorsForView`), keyed by component
 so a preview matches exactly what the annotator saw on the canvas. A zero-object
-image still gets a valid, box-free preview. The SVG builder is pure and
-deterministic (`buildVisualizationSvg`), so previews are reproducible.
+image still gets a valid, box-free preview. The tile layout is pure and
+deterministic (`layoutVizRects`) and every tile is clamped inside the image
+bounds, so previews are reproducible and never overflow the base image.
 
 ## Submission transaction
 
@@ -208,10 +213,14 @@ Export happens inside the atomic submission flow (`src/core/exporter/submit.ts`)
 2. Persist annotation (DB)
 3. Generate VOC XML + COCO JSON + YOLO TXT + dataset-level `classes.txt`
 4. Copy RAW image
-5. Copy annotated (clean) image + write all annotation files + render the
-   box-annotated `VISUALIZATIONS` preview (the only image with boxes)
-6. **Verify** all written files exist and are non-empty (the YOLO `.txt` may be
-   0 bytes when the image has no objects — a valid negative label)
+5. Copy annotated (clean) image + write all annotation files, then render the
+   box-annotated `VISUALIZATIONS` preview (the only image with boxes). The
+   preview is **best-effort**: a render failure is logged and the preview is
+   skipped, never failing an otherwise-valid submission.
+6. **Verify** every dataset file (RAW, clean ANNOTATED, VOC/COCO/YOLO, and
+   `classes.txt`) exists and is non-empty — the YOLO `.txt` may be 0 bytes when
+   the image has no objects (a valid negative label). The preview is a human
+   convenience, not dataset data, so it is not part of this mandatory check.
 7. Update DB
 8. Mark image `ANNOTATED`
 9. Load next `PENDING`
