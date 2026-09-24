@@ -32,12 +32,21 @@ export default function AnnotatePage({
 
   const counts = imageRepo.statusCounts(ws.id);
 
+  // Dataset-order neighbors for Previous/Next paging (independent of status).
+  const neighbors = image
+    ? imageRepo.neighborImages(ws.id, image.datasetIndex)
+    : { prevId: null, nextId: null, ordinal: 0 };
+
   return (
     <AnnotationWorkbench
       workspaceId={ws.id}
       workspaceName={ws.name}
       schema={schema}
       counts={counts}
+      prevImageId={neighbors.prevId}
+      nextImageId={neighbors.nextId}
+      position={neighbors.ordinal}
+      total={counts.total}
       image={
         image
           ? {

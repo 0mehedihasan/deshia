@@ -2,14 +2,20 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { FolderSearch, Loader2, PlayCircle, RotateCcw } from 'lucide-react';
+import { FolderCheck, FolderSearch, Loader2, PlayCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/status-badge';
 import { WorkspaceTopBar } from '@/components/workspace-top-bar';
 import { formatBytes, formatPercent } from '@/lib/utils';
-import { scanAndImportAction, type ScanImportSummary } from '@/app/actions/scan';
+import {
+  scanAndImportAction,
+  scanOutputAction,
+  type OutputScanSummary,
+  type ScanImportSummary,
+} from '@/app/actions/scan';
+import { OutputSummary } from './output-summary';
 import type { ImageStatus } from '@/types/domain';
 import type { StatusCounts } from '@/db/repositories/images';
 
@@ -37,7 +43,9 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
   return (
     <div className="rounded-lg border border-border bg-elevated px-3 py-2.5">
       <div className="metric-label">{label}</div>
-      <div className={`mt-1 font-mono text-section-lg tabular-nums ${tone ?? 'text-text'}`}>{value}</div>
+      <div className={`mt-1 font-mono text-section-lg tabular-nums ${tone ?? 'text-text'}`}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -56,6 +64,8 @@ export function Dashboard({
   const router = useRouter();
   const [scanning, startScan] = React.useTransition();
   const [summary, setSummary] = React.useState<ScanImportSummary | null>(null);
+  const [scanningOutput, startOutputScan] = React.useTransition();
+  const [outputSummary, setOutputSummary] = React.useState<OutputScanSummary | null>(null);
 
   const runScan = () => {
     setSummary(null);
@@ -63,6 +73,15 @@ export function Dashboard({
       const res = await scanAndImportAction(workspace.id);
       setSummary(res);
       router.refresh();
+    });
+  };
+
+  // Read-only inventory of the DeshiA_Output tree — the output-side counterpart
+  // to "Scan source". Does not mutate the DB, so no router.refresh() is needed.
+  const runOutputScan = () => {
+    setOutputSummary(null);
+    startOutputScan(async () => {
+      setOutputSummary(await scanOutputAction(workspace.id));
     });
   };
 
@@ -91,10 +110,22 @@ export function Dashboard({
                 <dd className="truncate font-mono text-text-secondary">{workspace.outputDir}</dd>
               </dl>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
               <Button variant="secondary" onClick={runScan} disabled={scanning}>
-                {scanning ? <Loader2 size={16} className="animate-spin" /> : <FolderSearch size={16} />}
+                {scanning ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <FolderSearch size={16} />
+                )}
                 {counts.total > 0 ? 'Rescan source' : 'Scan source'}
+              </Button>
+              <Button variant="secondary" onClick={runOutputScan} disabled={scanningOutput}>
+                {scanningOutput ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <FolderCheck size={16} />
+                )}
+                Scan output
               </Button>
               <Button
                 variant="primary"
@@ -104,7 +135,11 @@ export function Dashboard({
                 }
               >
                 {next?.resuming ? <RotateCcw size={16} /> : <PlayCircle size={16} />}
-                {next ? (next.resuming ? 'Resume annotating' : 'Start annotating') : 'Nothing pending'}
+                {next
+                  ? next.resuming
+                    ? 'Resume annotating'
+                    : 'Start annotating'
+                  : 'Nothing pending'}
               </Button>
             </div>
           </PanelBody>
@@ -124,12 +159,29 @@ export function Dashboard({
           </p>
         )}
 
+        {outputSummary &&
+          (!outputSummary.ok ? (
+            <p className="border-error/30 bg-error/10 rounded border px-3 py-2 text-meta-lg text-error">
+              Output scan failed: {outputSummary.error}
+            </p>
+          ) : !outputSummary.exists ? (
+            <p className="rounded border border-border bg-elevated px-3 py-2 text-meta-lg text-text-secondary">
+              No <span className="font-mono">DeshiA_Output</span> found yet under{' '}
+              <span className="font-mono">{outputSummary.outputRoot}</span>. It is created with the
+              workspace and filled as you submit images.
+            </p>
+          ) : (
+            <OutputSummary summary={outputSummary} />
+          ))}
+
         {/* Progress + status counts */}
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <Panel>
             <PanelHeader>
               <PanelTitle>Progress</PanelTitle>
-              <span className="font-mono text-meta-lg text-text-secondary">{formatPercent(progress)}</span>
+              <span className="font-mono text-meta-lg text-text-secondary">
+                {formatPercent(progress)}
+              </span>
             </PanelHeader>
             <PanelBody className="space-y-3">
               <div className="h-2 overflow-hidden rounded-full bg-elevated">
@@ -182,17 +234,17 @@ export function Dashboard({
                   </thead>
                   <tbody>
                     {images.map((img) => (
-                      <tr key={img.id} className="border-b border-border/60 hover:bg-elevated/60">
-                        <td className="px-4 py-2 font-mono text-muted tabular-nums">
+                      <tr key={img.id} className="border-border/60 hover:bg-elevated/60 border-b">
+                        <td className="px-4 py-2 font-mono tabular-nums text-muted">
                           {String(img.datasetIndex).padStart(3, '0')}
                         </td>
                         <td className="max-w-[280px] truncate px-4 py-2 font-mono text-text-secondary">
                           {img.filename}
                         </td>
-                        <td className="px-4 py-2 font-mono text-muted tabular-nums">
+                        <td className="px-4 py-2 font-mono tabular-nums text-muted">
                           {img.width}×{img.height}
                         </td>
-                        <td className="px-4 py-2 font-mono text-muted tabular-nums">
+                        <td className="px-4 py-2 font-mono tabular-nums text-muted">
                           {formatBytes(img.fileSize)}
                         </td>
                         <td className="px-4 py-2">

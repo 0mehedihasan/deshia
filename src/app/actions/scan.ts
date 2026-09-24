@@ -4,6 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { ensureDatabaseReady } from '@/db/bootstrap';
 import { imageRepo, workspaceRepo } from '@/db/repositories';
 import { scanDirectory } from '@/core/scanner/scan';
+import { inventoryOutput } from '@/core/exporter/output-inventory';
+import type { OutputClassCounts, OutputViewCounts } from '@/core/exporter/output-inventory';
+import { getBuiltInSchema, RICKSHAW_SCHEMA } from '@/schemas';
 
 /**
  * Dataset scan application service.
@@ -86,6 +89,72 @@ export async function scanAndImportAction(workspaceId: string): Promise<ScanImpo
       errors: result.errors,
       imported: inserted.length,
       skippedExisting,
+    };
+  } catch (err) {
+    return { ...empty, error: (err as Error).message };
+  }
+}
+
+/**
+ * Output-path scan summary — the read-only counterpart to the source scan.
+ *
+ * Reports what has actually been written to the workspace's DeshiA_Output tree
+ * (RAW / ANNOTATED images + annotation files / VISUALIZATIONS) so the annotator
+ * can confirm the exported dataset on disk, independent of the DB status counts.
+ * Reads only; never writes and never touches the read-only source tree.
+ */
+export interface OutputScanSummary {
+  ok: boolean;
+  error?: string;
+  /** Whether a DeshiA_Output tree exists under the workspace output folder. */
+  exists: boolean;
+  outputRoot: string;
+  rawImages: number;
+  annotatedImages: number;
+  annotationFiles: number;
+  visualizations: number;
+  hasClassesTxt: boolean;
+  totalBytes: number;
+  /** Per-class → per-view breakdown, in schema declaration order. */
+  classes: OutputClassCounts[];
+}
+
+// Re-exported so the dashboard can type the breakdown from one place.
+export type { OutputClassCounts, OutputViewCounts };
+
+export async function scanOutputAction(workspaceId: string): Promise<OutputScanSummary> {
+  ensureDatabaseReady();
+
+  const empty: OutputScanSummary = {
+    ok: false,
+    exists: false,
+    outputRoot: '',
+    rawImages: 0,
+    annotatedImages: 0,
+    annotationFiles: 0,
+    visualizations: 0,
+    hasClassesTxt: false,
+    totalBytes: 0,
+    classes: [],
+  };
+
+  const ws = workspaceRepo.getWorkspace(workspaceId);
+  if (!ws) return { ...empty, error: 'Workspace not found.' };
+
+  try {
+    const schema = getBuiltInSchema(ws.schemaId) ?? RICKSHAW_SCHEMA;
+    const inv = await inventoryOutput(ws.outputDir, schema);
+    return {
+      ok: true,
+      exists: inv.exists,
+      outputRoot: inv.root,
+      rawImages: inv.rawImages,
+      annotatedImages: inv.annotatedImages,
+      annotationFiles: inv.annotationFiles,
+      visualizations: inv.visualizations,
+      hasClassesTxt: inv.hasClassesTxt,
+      totalBytes: inv.totalBytes,
+      classes: inv.classes,
     };
   } catch (err) {
     return { ...empty, error: (err as Error).message };

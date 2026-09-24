@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, lt, lte, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { images, workspaces, type ImageRow, type NewImageRow } from '@/db/schema';
 import type { ImageStatus } from '@/types/domain';
@@ -87,6 +87,39 @@ export function listImages(workspaceId: string): ImageRow[] {
     .all();
 }
 
+/**
+ * Neighboring images by dataset order, for Previous/Next navigation in the
+ * annotation workbench. Neighbors are resolved by `datasetIndex` (the stable,
+ * monotonic dataset order) — never by row insertion or file counts — so paging
+ * is deterministic and independent of annotation status. `ordinal` is the
+ * 1-based position of `datasetIndex` among this workspace's images.
+ */
+export function neighborImages(
+  workspaceId: string,
+  datasetIndex: number,
+): { prevId: string | null; nextId: string | null; ordinal: number } {
+  const prev = db
+    .select({ id: images.id })
+    .from(images)
+    .where(and(eq(images.workspaceId, workspaceId), lt(images.datasetIndex, datasetIndex)))
+    .orderBy(desc(images.datasetIndex))
+    .limit(1)
+    .get();
+  const next = db
+    .select({ id: images.id })
+    .from(images)
+    .where(and(eq(images.workspaceId, workspaceId), gt(images.datasetIndex, datasetIndex)))
+    .orderBy(asc(images.datasetIndex))
+    .limit(1)
+    .get();
+  const ordinalRow = db
+    .select({ n: sql<number>`count(*)` })
+    .from(images)
+    .where(and(eq(images.workspaceId, workspaceId), lte(images.datasetIndex, datasetIndex)))
+    .get();
+  return { prevId: prev?.id ?? null, nextId: next?.id ?? null, ordinal: ordinalRow?.n ?? 0 };
+}
+
 /** First image with the given status, ordered by datasetIndex. */
 export function firstImageWithStatus(
   workspaceId: string,
@@ -102,10 +135,7 @@ export function firstImageWithStatus(
 }
 
 export function setImageStatus(id: string, status: ImageStatus): void {
-  db.update(images)
-    .set({ status, updatedAt: Date.now() })
-    .where(eq(images.id, id))
-    .run();
+  db.update(images).set({ status, updatedAt: Date.now() }).where(eq(images.id, id)).run();
 }
 
 export interface StatusCounts {
@@ -144,5 +174,7 @@ export function statusCounts(workspaceId: string): StatusCounts {
 }
 
 export function workspaceExists(workspaceId: string): boolean {
-  return Boolean(db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, workspaceId)).get());
+  return Boolean(
+    db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, workspaceId)).get(),
+  );
 }

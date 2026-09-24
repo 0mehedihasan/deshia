@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronLeft, LayoutDashboard, PenTool, Settings } from 'lucide-react';
+import { LayoutDashboard, PenTool, Settings } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { DeshiaLogo } from '@/components/deshia-logo';
 import { cn } from '@/lib/utils';
 
 /**
@@ -19,22 +20,41 @@ export function WorkspaceTopBar({
   active: 'dashboard' | 'annotate' | 'settings';
 }) {
   const tabs = [
-    { key: 'dashboard' as const, href: `/workspace/${workspaceId}`, label: 'Dashboard', icon: LayoutDashboard },
-    { key: 'annotate' as const, href: `/workspace/${workspaceId}/annotate`, label: 'Annotate', icon: PenTool },
-    { key: 'settings' as const, href: `/workspace/${workspaceId}/settings`, label: 'Settings', icon: Settings },
+    {
+      key: 'dashboard' as const,
+      href: `/workspace/${workspaceId}`,
+      label: 'Dashboard',
+      icon: LayoutDashboard,
+    },
+    {
+      key: 'annotate' as const,
+      href: `/workspace/${workspaceId}/annotate`,
+      label: 'Annotate',
+      icon: PenTool,
+    },
+    {
+      key: 'settings' as const,
+      href: `/workspace/${workspaceId}/settings`,
+      label: 'Settings',
+      icon: Settings,
+    },
   ];
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface px-4">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <Link
           href="/"
-          className="inline-flex h-8 w-8 items-center justify-center rounded border border-border-strong bg-elevated text-text-secondary transition-colors hover:border-primary hover:text-text"
           title="All workspaces"
+          className="inline-flex shrink-0 items-center gap-2 rounded px-1 py-0.5 text-text transition-colors hover:text-primary focus-visible:outline-none"
         >
-          <ChevronLeft size={16} />
+          <DeshiaLogo size={20} className="shrink-0" />
+          <span className="text-body font-semibold tracking-tight">DeshiA</span>
         </Link>
-        <span className="text-body font-semibold text-text">{name}</span>
+        <span className="text-border-strong" aria-hidden>
+          /
+        </span>
+        <span className="min-w-0 truncate text-body font-medium text-text-secondary">{name}</span>
       </div>
 
       <nav className="flex items-center gap-1">

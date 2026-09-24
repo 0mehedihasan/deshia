@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   Pencil,
   RotateCcw,
@@ -34,7 +36,12 @@ import type { CanvasBox } from './annotation-canvas';
 
 const AnnotationCanvas = dynamic(
   () => import('./annotation-canvas').then((m) => m.AnnotationCanvas),
-  { ssr: false, loading: () => <div className="grid h-full place-items-center text-meta text-muted">Loading canvas…</div> },
+  {
+    ssr: false,
+    loading: () => (
+      <div className="grid h-full place-items-center text-meta text-muted">Loading canvas…</div>
+    ),
+  },
 );
 
 const VISIBILITIES: Visibility[] = ['VISIBLE', 'OCCLUDED', 'NOT_VISIBLE'];
@@ -75,6 +82,10 @@ export function AnnotationWorkbench({
   counts,
   image,
   initialState,
+  prevImageId = null,
+  nextImageId = null,
+  position,
+  total,
 }: {
   workspaceId: string;
   workspaceName: string;
@@ -82,6 +93,12 @@ export function AnnotationWorkbench({
   counts: { total: number; annotated: number; skipped: number };
   image: WorkbenchImage | null;
   initialState: AnnotationState | null;
+  /** Dataset-order neighbor ids for Previous/Next paging (null at the ends). */
+  prevImageId?: string | null;
+  nextImageId?: string | null;
+  /** 1-based position of the current image and the workspace image total. */
+  position?: number;
+  total?: number;
 }) {
   const router = useRouter();
   const store = useAnnotationStore();
@@ -181,7 +198,11 @@ export function AnnotationWorkbench({
     classKey: draft!.classKey,
     viewKey: draft!.viewKey,
     componentVisibility: draft!.componentVisibility,
-    boxes: draft!.boxes.map((b) => ({ componentKey: b.componentKey, box: b.box, visibility: b.visibility })),
+    boxes: draft!.boxes.map((b) => ({
+      componentKey: b.componentKey,
+      box: b.box,
+      visibility: b.visibility,
+    })),
   });
 
   // Debounced autosave whenever the draft is dirty.
@@ -220,6 +241,10 @@ export function AnnotationWorkbench({
     else router.push(`/workspace/${workspaceId}`);
   };
 
+  // Free dataset-order paging (does not submit/skip). The debounced autosave
+  // keeps the current draft; navigating away never discards it.
+  const goToImage = (id: string) => router.push(`/workspace/${workspaceId}/annotate?image=${id}`);
+
   const submit = async () => {
     if (!draft) return;
     setBusy('submit');
@@ -254,7 +279,8 @@ export function AnnotationWorkbench({
     store.selectBox(null);
   };
 
-  const boxCountFor = (key: string) => (draft?.boxes ?? []).filter((b) => b.componentKey === key).length;
+  const boxCountFor = (key: string) =>
+    (draft?.boxes ?? []).filter((b) => b.componentKey === key).length;
 
   const resetDraft = () => {
     if (!image) return;
@@ -273,7 +299,7 @@ export function AnnotationWorkbench({
     setSubmitErrors([]);
   };
 
-  const activeColor = activeComponentKey ? colors.get(activeComponentKey)?.border ?? null : null;
+  const activeColor = activeComponentKey ? (colors.get(activeComponentKey)?.border ?? null) : null;
   const canSubmit = !!validation?.ok && !busy;
   const selectedBox = draft?.boxes.find((b) => b.id === store.selectedBoxId) ?? null;
 
@@ -290,7 +316,11 @@ export function AnnotationWorkbench({
               Every image in this workspace has been annotated or skipped. Import more images or
               review the dashboard.
             </p>
-            <Button className="mt-4" variant="secondary" onClick={() => router.push(`/workspace/${workspaceId}`)}>
+            <Button
+              className="mt-4"
+              variant="secondary"
+              onClick={() => router.push(`/workspace/${workspaceId}`)}
+            >
               Back to dashboard
             </Button>
           </div>
@@ -305,7 +335,9 @@ export function AnnotationWorkbench({
       {/* Image identity strip */}
       <div className="flex items-center justify-between border-b border-border bg-surface px-6 py-2">
         <div className="flex items-center gap-3 text-meta-lg">
-          <span className="font-mono text-muted">#{String(image.datasetIndex).padStart(3, '0')}</span>
+          <span className="font-mono text-muted">
+            #{String(image.datasetIndex).padStart(3, '0')}
+          </span>
           <span className="font-mono text-text-secondary">{image.filename}</span>
           <span className="font-mono text-muted">
             {image.width}×{image.height}
@@ -358,9 +390,10 @@ export function AnnotationWorkbench({
                 </option>
                 {viewKeys.map((k) => (
                   <option key={k} value={k}>
-                    {(classKey && schema.classes
-                      .find((c) => c.key === classKey)
-                      ?.views.find((v) => v.key === k)?.label) ?? k}
+                    {(classKey &&
+                      schema.classes.find((c) => c.key === classKey)?.views.find((v) => v.key === k)
+                        ?.label) ??
+                      k}
                   </option>
                 ))}
               </select>
@@ -392,7 +425,9 @@ export function AnnotationWorkbench({
                             className="h-3 w-3 flex-none rounded-sm"
                             style={{ backgroundColor: color?.border ?? '#4DA3FF' }}
                           />
-                          <span className="truncate text-meta-lg font-medium text-text">{c.label}</span>
+                          <span className="truncate text-meta-lg font-medium text-text">
+                            {c.label}
+                          </span>
                         </div>
                         <div className="flex flex-none items-center gap-1.5">
                           {count > 0 && (
@@ -400,7 +435,16 @@ export function AnnotationWorkbench({
                               {count}
                             </Badge>
                           )}
-                          <Badge tone={c.box === 'required' ? 'primary' : c.box === 'optional' ? 'muted' : 'neutral'} mono>
+                          <Badge
+                            tone={
+                              c.box === 'required'
+                                ? 'primary'
+                                : c.box === 'optional'
+                                  ? 'muted'
+                                  : 'neutral'
+                            }
+                            mono
+                          >
                             {c.box}
                           </Badge>
                         </div>
@@ -415,7 +459,7 @@ export function AnnotationWorkbench({
                             className={
                               'rounded border px-2 py-0.5 text-meta transition-colors ' +
                               (visibility === v
-                                ? 'border-primary bg-primary/10 text-primary'
+                                ? 'bg-primary/10 border-primary text-primary'
                                 : 'border-border text-text-secondary hover:border-border-strong')
                             }
                           >
@@ -453,14 +497,18 @@ export function AnnotationWorkbench({
             activeComponentKey={activeComponentKey}
             activeColor={activeColor}
             onDrawBox={(componentKey, box) => {
-              store.addBox(componentKey, box, draft?.componentVisibility[componentKey] ?? 'VISIBLE');
+              store.addBox(
+                componentKey,
+                box,
+                draft?.componentVisibility[componentKey] ?? 'VISIBLE',
+              );
               setActiveComponentKey(null);
             }}
             onUpdateBox={(id, box) => store.updateBox(id, box)}
             onSelectBox={(id) => store.selectBox(id)}
           />
           {activeComponentKey && (
-            <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md border border-border-strong bg-elevated/95 px-3 py-1 text-meta-lg text-text-secondary shadow">
+            <div className="bg-elevated/95 pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md border border-border-strong px-3 py-1 text-meta-lg text-text-secondary shadow">
               Drawing:{' '}
               <span className="font-medium text-text">
                 {components.find((c) => c.key === activeComponentKey)?.label ?? activeComponentKey}
@@ -492,7 +540,7 @@ export function AnnotationWorkbench({
                       key={b.id}
                       className={
                         'flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 ' +
-                        (selected ? 'border-primary bg-primary/5' : 'border-border bg-elevated')
+                        (selected ? 'bg-primary/5 border-primary' : 'border-border bg-elevated')
                       }
                     >
                       <button
@@ -512,7 +560,7 @@ export function AnnotationWorkbench({
                         type="button"
                         aria-label="Delete box"
                         onClick={() => store.removeBox(b.id)}
-                        className="flex-none rounded p-1 text-muted transition-colors hover:bg-error/10 hover:text-error"
+                        className="hover:bg-error/10 flex-none rounded p-1 text-muted transition-colors hover:text-error"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -528,7 +576,7 @@ export function AnnotationWorkbench({
               Validation
             </h3>
             {validation?.ok ? (
-              <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 px-2.5 py-2 text-meta-lg text-success">
+              <div className="border-success/30 bg-success/10 flex items-center gap-2 rounded-md border px-2.5 py-2 text-meta-lg text-success">
                 <Check className="h-4 w-4 flex-none" />
                 Ready to submit.
               </div>
@@ -537,7 +585,7 @@ export function AnnotationWorkbench({
                 {(validation?.errors ?? []).map((e, i) => (
                   <li
                     key={`e-${i}`}
-                    className="flex items-start gap-2 rounded-md border border-error/30 bg-error/10 px-2.5 py-1.5 text-meta-lg text-error"
+                    className="border-error/30 bg-error/10 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-meta-lg text-error"
                   >
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
                     <span>{e.message}</span>
@@ -550,7 +598,7 @@ export function AnnotationWorkbench({
                 {(validation?.warnings ?? []).map((w, i) => (
                   <li
                     key={`w-${i}`}
-                    className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-meta-lg text-warning"
+                    className="border-warning/30 bg-warning/10 flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-meta-lg text-warning"
                   >
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
                     <span>{w.message}</span>
@@ -561,8 +609,10 @@ export function AnnotationWorkbench({
           </div>
 
           {submitErrors.length > 0 && (
-            <div className="rounded-md border border-error/40 bg-error/10 p-2.5">
-              <p className="mb-1 text-meta font-medium uppercase tracking-wide text-error">Submit failed</p>
+            <div className="border-error/40 bg-error/10 rounded-md border p-2.5">
+              <p className="mb-1 text-meta font-medium uppercase tracking-wide text-error">
+                Submit failed
+              </p>
               <ul className="space-y-1 text-meta-lg text-error">
                 {submitErrors.map((e, i) => (
                   <li key={i}>{e}</li>
@@ -582,11 +632,36 @@ export function AnnotationWorkbench({
       {/* Bottom action bar */}
       <div className="flex items-center justify-between gap-3 border-t border-border bg-surface px-6 py-3">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => router.back()} disabled={!!busy}>
+          <Button
+            variant="ghost"
+            onClick={() => prevImageId && goToImage(prevImageId)}
+            disabled={!prevImageId || !!busy}
+            title={prevImageId ? 'Previous image' : 'This is the first image'}
+          >
+            <ChevronLeft className="h-4 w-4" />
             Previous
           </Button>
+          {typeof position === 'number' && typeof total === 'number' && total > 0 && (
+            <span className="min-w-[3.5rem] text-center font-mono text-meta tabular-nums text-muted">
+              {position}/{total}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            onClick={() => nextImageId && goToImage(nextImageId)}
+            disabled={!nextImageId || !!busy}
+            title={nextImageId ? 'Next image' : 'This is the last image'}
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <div className="mx-1 h-5 w-px bg-border" aria-hidden />
           <Button variant="ghost" onClick={skip} disabled={!!busy}>
-            {busy === 'skip' ? <Loader2 className="h-4 w-4 animate-spin" /> : <SkipForward className="h-4 w-4" />}
+            {busy === 'skip' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <SkipForward className="h-4 w-4" />
+            )}
             Skip
           </Button>
           <Button variant="ghost" onClick={resetDraft} disabled={!!busy}>
@@ -595,11 +670,24 @@ export function AnnotationWorkbench({
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={saveNow} disabled={!!busy || store.autosave === 'saving'}>
+          <Button
+            variant="secondary"
+            onClick={saveNow}
+            disabled={!!busy || store.autosave === 'saving'}
+          >
             Save draft
           </Button>
-          <Button variant="success" onClick={submit} disabled={!canSubmit} title={canSubmit ? undefined : 'Resolve validation errors first'}>
-            {busy === 'submit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          <Button
+            variant="success"
+            onClick={submit}
+            disabled={!canSubmit}
+            title={canSubmit ? undefined : 'Resolve validation errors first'}
+          >
+            {busy === 'submit' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
             Submit
           </Button>
         </div>
@@ -608,7 +696,13 @@ export function AnnotationWorkbench({
   );
 }
 
-function AutosaveIndicator({ status, lastSavedAt }: { status: AutosaveStatus; lastSavedAt: number | null }) {
+function AutosaveIndicator({
+  status,
+  lastSavedAt,
+}: {
+  status: AutosaveStatus;
+  lastSavedAt: number | null;
+}) {
   if (status === 'saving') {
     return (
       <span className="inline-flex items-center gap-1.5 text-meta-lg text-muted">

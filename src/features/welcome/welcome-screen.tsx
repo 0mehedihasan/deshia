@@ -6,6 +6,7 @@ import { ArrowRight, FolderOpen, Github, Loader2, Pencil, Plus, Trash2, X } from
 import { Button } from '@/components/ui/button';
 import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { DeshiaLogo } from '@/components/deshia-logo';
 import { selectDirectory, isTauri } from '@/lib/native-dialog';
 import {
   createWorkspaceAction,
@@ -201,11 +202,14 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
       <header className="mb-10 flex items-center justify-between">
-        <div>
-          <h1 className="text-title font-semibold tracking-tight text-text">DeshiA</h1>
-          <p className="mt-1 text-body text-text-secondary">
-            Deshi Annotation — a workstation for structured computer-vision datasets.
-          </p>
+        <div className="flex items-center gap-3">
+          <DeshiaLogo size={34} className="shrink-0" />
+          <div>
+            <h1 className="text-title font-semibold tracking-tight text-text">DeshiA</h1>
+            <p className="mt-1 text-body text-text-secondary">
+              Deshi Annotation — a workstation for structured computer-vision datasets.
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <a
@@ -261,12 +265,18 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
               </p>
             )}
             {error && (
-              <p className="whitespace-pre-line rounded border border-error/30 bg-error/10 px-3 py-2 text-meta-lg text-error">
+              <p className="border-error/30 bg-error/10 whitespace-pre-line rounded border px-3 py-2 text-meta-lg text-error">
                 {error}
               </p>
             )}
 
-            <Button variant="primary" size="lg" className="w-full" onClick={submit} disabled={pending}>
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full"
+              onClick={submit}
+              disabled={pending}
+            >
               {pending ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
               Create workspace
             </Button>
@@ -321,7 +331,7 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
                           onClick={() => openDelete(w)}
                           title="Delete workspace"
                           aria-label={`Delete ${w.name}`}
-                          className="grid h-8 w-8 place-items-center rounded text-muted transition-colors hover:bg-error/10 hover:text-error focus:outline-none focus:ring-1 focus:ring-error"
+                          className="hover:bg-error/10 grid h-8 w-8 place-items-center rounded text-muted transition-colors hover:text-error focus:outline-none focus:ring-1 focus:ring-error"
                         >
                           <Trash2 size={15} />
                         </button>
@@ -361,7 +371,7 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
                 />
               </label>
               {modalError && (
-                <p className="whitespace-pre-line rounded border border-error/30 bg-error/10 px-3 py-2 text-meta-lg text-error">
+                <p className="border-error/30 bg-error/10 whitespace-pre-line rounded border px-3 py-2 text-meta-lg text-error">
                   {modalError}
                 </p>
               )}
@@ -369,7 +379,11 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
                 <Button variant="secondary" onClick={closeModals} disabled={busy}>
                   Cancel
                 </Button>
-                <Button variant="primary" onClick={saveRename} disabled={busy || !renameValue.trim()}>
+                <Button
+                  variant="primary"
+                  onClick={saveRename}
+                  disabled={busy || !renameValue.trim()}
+                >
                   {busy && <Loader2 size={16} className="animate-spin" />}
                   Save
                 </Button>
@@ -418,7 +432,7 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
                 />
               </label>
               {modalError && (
-                <p className="whitespace-pre-line rounded border border-error/30 bg-error/10 px-3 py-2 text-meta-lg text-error">
+                <p className="border-error/30 bg-error/10 whitespace-pre-line rounded border px-3 py-2 text-meta-lg text-error">
                   {modalError}
                 </p>
               )}
@@ -426,7 +440,11 @@ export function WelcomeScreen({ workspaces }: { workspaces: WorkspaceSummary[] }
                 <Button variant="secondary" onClick={closeModals} disabled={busy}>
                   Cancel
                 </Button>
-                <Button variant="danger" onClick={confirmDelete} disabled={busy || !deleteConfirmed}>
+                <Button
+                  variant="danger"
+                  onClick={confirmDelete}
+                  disabled={busy || !deleteConfirmed}
+                >
                   {busy ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                   Delete workspace
                 </Button>
