@@ -6,6 +6,7 @@ import { ensureDatabaseReady } from '@/db/bootstrap';
 import { workspaceRepo } from '@/db/repositories';
 import { getBuiltInSchema, RICKSHAW_SCHEMA } from '@/schemas';
 import { ensureWorkspaceOutputScaffold } from '@/core/exporter/output-tree';
+import { DELETE_CONFIRM_WORD } from './workspace-constants';
 
 /**
  * Workspace application service (server actions).
@@ -82,6 +83,66 @@ export async function createWorkspaceAction(
     });
     revalidatePath('/');
     return { ok: true, workspaceId: ws.id };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+export interface RenameWorkspaceFormInput {
+  id: string;
+  name: string;
+}
+
+export type RenameWorkspaceResult = { ok: true } | { ok: false; error: string };
+
+export async function renameWorkspaceAction(
+  input: RenameWorkspaceFormInput,
+): Promise<RenameWorkspaceResult> {
+  try {
+    ensureDatabaseReady();
+    const id = input.id.trim();
+    const name = input.name.trim();
+    if (!id) return { ok: false, error: 'Missing workspace id.' };
+    if (!name) return { ok: false, error: 'Workspace name is required.' };
+
+    const updated = workspaceRepo.renameWorkspace(id, name);
+    if (!updated) return { ok: false, error: 'Workspace not found.' };
+    revalidatePath('/');
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+export interface DeleteWorkspaceFormInput {
+  id: string;
+  /** Must equal DELETE_CONFIRM_WORD (case-insensitive) — a type-to-confirm guard. */
+  confirmText: string;
+}
+
+export type DeleteWorkspaceResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteWorkspaceAction(
+  input: DeleteWorkspaceFormInput,
+): Promise<DeleteWorkspaceResult> {
+  try {
+    ensureDatabaseReady();
+    const id = input.id.trim();
+    if (!id) return { ok: false, error: 'Missing workspace id.' };
+
+    // Re-check the type-to-confirm guard on the server too — never trust the
+    // client to have enforced it (a mistyped/scripted call must still be safe).
+    if (input.confirmText.trim().toLowerCase() !== DELETE_CONFIRM_WORD) {
+      return { ok: false, error: `Type "${DELETE_CONFIRM_WORD}" to confirm deletion.` };
+    }
+
+    // DB-only delete: on-disk source images and the DeshiA_Output folder are
+    // deliberately preserved (CLAUDE.md golden rule #2). FK cascade removes all
+    // of this workspace's images/annotations/boxes/events/export jobs.
+    const removed = workspaceRepo.deleteWorkspace(id);
+    if (!removed) return { ok: false, error: 'Workspace not found.' };
+    revalidatePath('/');
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: (err as Error).message };
   }

@@ -37,8 +37,8 @@ interface WorkspaceInfo {
 
 const EXPORT_FORMATS: Array<{ label: string; status: 'ready' | 'declared' }> = [
   { label: 'Pascal VOC XML', status: 'ready' },
-  { label: 'COCO JSON', status: 'declared' },
-  { label: 'YOLO TXT', status: 'declared' },
+  { label: 'COCO JSON', status: 'ready' },
+  { label: 'YOLO TXT', status: 'ready' },
 ];
 
 function boxTone(box: ComponentSummary['box']) {
@@ -79,12 +79,22 @@ export function Settings({ workspace, schema }: { workspace: WorkspaceInfo; sche
           <PanelHeader>
             <PanelTitle>Export formats</PanelTitle>
           </PanelHeader>
-          <PanelBody className="flex flex-wrap gap-2">
-            {EXPORT_FORMATS.map((f) => (
-              <Badge key={f.label} tone={f.status === 'ready' ? 'success' : 'muted'}>
-                {f.label} — {f.status === 'ready' ? 'available' : 'planned'}
-              </Badge>
-            ))}
+          <PanelBody className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {EXPORT_FORMATS.map((f) => (
+                <Badge key={f.label} tone={f.status === 'ready' ? 'success' : 'muted'}>
+                  {f.label} — {f.status === 'ready' ? 'available' : 'planned'}
+                </Badge>
+              ))}
+            </div>
+            <p className="text-meta text-muted">
+              Every submission writes all three formats side by side under{' '}
+              <span className="font-mono">ANNOTATED/&lt;class&gt;/&lt;view&gt;/annotations/</span>:
+              a Pascal VOC <span className="font-mono">.xml</span>, a self-contained COCO{' '}
+              <span className="font-mono">.json</span>, and a YOLO <span className="font-mono">.txt</span>.
+              A dataset-level <span className="font-mono">classes.txt</span> (YOLO class ids) is kept at
+              the <span className="font-mono">ANNOTATED/</span> root, consistent across every folder.
+            </p>
           </PanelBody>
         </Panel>
 

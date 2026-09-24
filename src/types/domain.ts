@@ -35,7 +35,7 @@ export const SUPPORTED_EXTENSIONS = [
 ] as const;
 export type SupportedExtension = (typeof SUPPORTED_EXTENSIONS)[number];
 
-/** Export formats. Only VOC is implemented; others are declared for the UI. */
+/** Export formats emitted on every submission: Pascal VOC XML, COCO JSON, YOLO txt. */
 export const EXPORT_FORMATS = ['PASCAL_VOC', 'COCO', 'YOLO'] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 

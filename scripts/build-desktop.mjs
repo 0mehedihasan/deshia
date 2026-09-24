@@ -21,11 +21,19 @@
 // `<app_data_dir>/runtime/{server,migrations}` and launches the server with
 // DESHIA_DB_PATH / DESHIA_MIGRATIONS_DIR pointed at writable per-user paths.
 //
+// Modes:
+//   (default)        full pipeline above — runs as `beforeBuildCommand`.
+//   --sidecar-only   stage ONLY the node binary + a placeholder app.tar and
+//                    exit (no `next build`). Runs as `beforeDevCommand` so
+//                    `tauri dev` compiles: tauri-build validates the externalBin
+//                    + resource paths at compile time even though the dev shell
+//                    never spawns the sidecar.
+//
 // Env knobs:
 //   SKIP_NEXT_BUILD=1  reuse an existing .next/standalone (faster iteration).
 
 import { execFileSync, execSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -56,7 +64,47 @@ function reset(dir) {
   mkdirSync(dir, { recursive: true });
 }
 
-// __APPEND_MARKER__
+/** Copy the running Node binary to binaries/node-<triple> (the Tauri externalBin). */
+function stageNodeBinary() {
+  const triple = targetTriple();
+  const binDir = join(tauri, 'binaries');
+  mkdirSync(binDir, { recursive: true });
+  const ext = process.platform === 'win32' ? '.exe' : '';
+  const nodeDest = join(binDir, `node-${triple}${ext}`);
+
+  // `beforeDevCommand` runs this on every `tauri dev`, so skip the ~120 MB copy
+  // when an identically-sized binary is already staged (a node upgrade changes
+  // the size and re-triggers the copy). Keeps the dev loop fast; a real build
+  // still refreshes whenever the running node differs.
+  const srcSize = statSync(process.execPath).size;
+  if (existsSync(nodeDest) && statSync(nodeDest).size === srcSize) {
+    log(`node runtime already staged → binaries/node-${triple}${ext} (skipping copy)`);
+    if (process.platform !== 'win32') chmodSync(nodeDest, 0o755);
+    return;
+  }
+
+  log(`bundling node runtime (${process.execPath}) → binaries/node-${triple}${ext}`);
+  cpSync(process.execPath, nodeDest, { dereference: true });
+  if (process.platform !== 'win32') chmodSync(nodeDest, 0o755);
+}
+
+// Fast path for `tauri dev`: the dev shell never spawns the sidecar (it's guarded
+// behind release builds), but tauri-build still validates that the externalBin +
+// resource paths exist at compile time. Stage just the node binary and a valid
+// EMPTY tarball (1024 zero bytes = an empty archive) so `tauri dev` compiles; a
+// real `tauri build` regenerates app.tar via the full pipeline below.
+if (process.argv.includes('--sidecar-only')) {
+  stageNodeBinary();
+  const resourcesDir = join(tauri, 'resources');
+  mkdirSync(resourcesDir, { recursive: true });
+  const tarPath = join(resourcesDir, 'app.tar');
+  if (!existsSync(tarPath)) {
+    log('creating placeholder resources/app.tar for dev');
+    writeFileSync(tarPath, Buffer.alloc(1024));
+  }
+  log('sidecar-only staging done (dev).');
+  process.exit(0);
+}
 
 // 1. Next.js production build (standalone server).
 if (process.env.SKIP_NEXT_BUILD === '1') {
@@ -127,13 +175,6 @@ if (!existsSync(tarPath)) {
 rmSync(stage, { recursive: true, force: true });
 
 // 4. Bundle a Node runtime as the externalBin the Rust shell spawns.
-const triple = targetTriple();
-const binDir = join(tauri, 'binaries');
-mkdirSync(binDir, { recursive: true });
-const ext = process.platform === 'win32' ? '.exe' : '';
-const nodeDest = join(binDir, `node-${triple}${ext}`);
-log(`bundling node runtime (${process.execPath}) → binaries/node-${triple}${ext}`);
-cpSync(process.execPath, nodeDest, { dereference: true });
-if (process.platform !== 'win32') chmodSync(nodeDest, 0o755);
+stageNodeBinary();
 
 log('done. Ready for `tauri build`.');

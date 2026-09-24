@@ -55,6 +55,27 @@ export function annotationXmlName(
   return `${stem('annotated', classKey, viewKey, datasetIndex)}.xml`;
 }
 
+/** Per-image COCO JSON filename (shares the annotated stem). */
+export function annotationCocoName(
+  classKey: string,
+  viewKey: string,
+  datasetIndex: number,
+): string {
+  return `${stem('annotated', classKey, viewKey, datasetIndex)}.json`;
+}
+
+/** Per-image YOLO label filename (shares the annotated stem). */
+export function annotationYoloName(
+  classKey: string,
+  viewKey: string,
+  datasetIndex: number,
+): string {
+  return `${stem('annotated', classKey, viewKey, datasetIndex)}.txt`;
+}
+
+/** Dataset-level YOLO class-list filename (one per ANNOTATED root). */
+export const YOLO_CLASSES_FILENAME = 'classes.txt';
+
 export function visualizationName(
   classKey: string,
   viewKey: string,

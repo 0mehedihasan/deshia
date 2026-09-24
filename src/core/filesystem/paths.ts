@@ -31,6 +31,15 @@ export function rawDir(outputDir: string, classKey: string, viewKey: string): st
 }
 
 /**
+ * The ANNOTATED dataset root: DeshiA_Output/ANNOTATED. Dataset-level label maps
+ * (e.g. the YOLO `classes.txt`, which must be consistent across every class/view
+ * folder) live directly here rather than under a single (class, view) leaf.
+ */
+export function annotatedRoot(outputDir: string): string {
+  return path.join(outputRoot(outputDir), 'ANNOTATED');
+}
+
+/**
  * Directories for the ANNOTATED dataset:
  * ANNOTATED/<class>/<view>/{images,annotations}/.
  */

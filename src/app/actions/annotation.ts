@@ -67,81 +67,93 @@ export type SubmitResult =
  * failure preserves the draft and leaves the image un-annotated for retry.
  */
 export async function submitImageAction(payload: DraftPayload): Promise<SubmitResult> {
-  ensureDatabaseReady();
-
-  const ws = workspaceRepo.getWorkspace(payload.workspaceId);
-  if (!ws) return { ok: false, errors: ['Workspace not found.'] };
-  const schema = getBuiltInSchema(ws.schemaId);
-  if (!schema) return { ok: false, errors: [`Unknown schema "${ws.schemaId}".`] };
-  const image = imageRepo.getImage(payload.imageId);
-  if (!image) return { ok: false, errors: ['Image not found.'] };
-
-  // 1–2. Persist the draft first so nothing is lost even if export fails.
-  let state;
   try {
-    state = annotationRepo.saveDraft({
-      imageId: payload.imageId,
+    ensureDatabaseReady();
+
+    const ws = workspaceRepo.getWorkspace(payload.workspaceId);
+    if (!ws) return { ok: false, errors: ['Workspace not found.'] };
+    const schema = getBuiltInSchema(ws.schemaId);
+    if (!schema) return { ok: false, errors: [`Unknown schema "${ws.schemaId}".`] };
+    const image = imageRepo.getImage(payload.imageId);
+    if (!image) return { ok: false, errors: ['Image not found.'] };
+
+    // 1–2. Persist the draft first so nothing is lost even if export fails.
+    let state;
+    try {
+      state = annotationRepo.saveDraft({
+        imageId: payload.imageId,
+        workspaceId: payload.workspaceId,
+        schemaId: ws.schemaId,
+        schemaVersion: ws.schemaVersion,
+        classKey: payload.classKey,
+        viewKey: payload.viewKey,
+        componentVisibility: payload.componentVisibility,
+        boxes: payload.boxes,
+      });
+    } catch (err) {
+      return { ok: false, errors: [`Could not persist draft: ${(err as Error).message}`] };
+    }
+
+    const job = exportJobRepo.createExportJob({
       workspaceId: payload.workspaceId,
-      schemaId: ws.schemaId,
-      schemaVersion: ws.schemaVersion,
-      classKey: payload.classKey,
-      viewKey: payload.viewKey,
-      componentVisibility: payload.componentVisibility,
-      boxes: payload.boxes,
-    });
-  } catch (err) {
-    return { ok: false, errors: [`Could not persist draft: ${(err as Error).message}`] };
-  }
-
-  const job = exportJobRepo.createExportJob({
-    workspaceId: payload.workspaceId,
-    imageId: payload.imageId,
-  });
-
-  // 3–6. Filesystem export + verification (no DB mutation inside).
-  const result = await exportImage({
-    schema,
-    outputDir: ws.outputDir,
-    image: {
-      id: image.id,
-      datasetIndex: image.datasetIndex,
-      originalPath: image.originalPath,
-      extension: image.extension,
-      width: image.width,
-      height: image.height,
-    },
-    state,
-  });
-
-  if (!result.ok) {
-    exportJobRepo.markExportFailed(job.id, result.errors.join('; '));
-    eventRepo.appendEvent({
       imageId: payload.imageId,
-      kind: 'EXPORT_FAILED',
-      payload: { errors: result.errors },
     });
-    return { ok: false, errors: result.errors };
-  }
 
-  // 7–8. Only now — files verified on disk — commit the ANNOTATED status.
-  try {
-    annotationRepo.markSubmitted(payload.imageId);
-    imageRepo.setImageStatus(payload.imageId, result.nextStatus);
-    exportJobRepo.markExportSucceeded(job.id, result.outputs.relativePaths);
+    // 3–6. Filesystem export + verification (no DB mutation inside).
+    const result = await exportImage({
+      schema,
+      outputDir: ws.outputDir,
+      image: {
+        id: image.id,
+        datasetIndex: image.datasetIndex,
+        originalPath: image.originalPath,
+        extension: image.extension,
+        width: image.width,
+        height: image.height,
+      },
+      state,
+    });
+
+    if (!result.ok) {
+      exportJobRepo.markExportFailed(job.id, result.errors.join('; '));
+      eventRepo.appendEvent({
+        imageId: payload.imageId,
+        kind: 'EXPORT_FAILED',
+        payload: { errors: result.errors },
+      });
+      return { ok: false, errors: result.errors };
+    }
+
+    // 7–8. Only now — files verified on disk — commit the ANNOTATED status.
+    try {
+      annotationRepo.markSubmitted(payload.imageId);
+      imageRepo.setImageStatus(payload.imageId, result.nextStatus);
+      exportJobRepo.markExportSucceeded(job.id, result.outputs.relativePaths);
+    } catch (err) {
+      exportJobRepo.markExportFailed(job.id, (err as Error).message);
+      return {
+        ok: false,
+        errors: [`Files written but DB update failed: ${(err as Error).message}`],
+      };
+    }
+
+    // Post-commit bookkeeping. The submission already succeeded, so a failure
+    // here must not turn a good submit into an error — degrade to "no next".
+    let nextImageId: string | null = null;
+    try {
+      workspaceRepo.touchWorkspace(payload.workspaceId);
+      revalidatePath(`/workspace/${payload.workspaceId}`);
+      nextImageId = nextImageToPresent(payload.workspaceId)?.image.id ?? null;
+    } catch {
+      nextImageId = null;
+    }
+
+    return { ok: true, outputs: result.outputs.relativePaths, nextImageId };
   } catch (err) {
-    exportJobRepo.markExportFailed(job.id, (err as Error).message);
-    return { ok: false, errors: [`Files written but DB update failed: ${(err as Error).message}`] };
+    // Last-resort guard: a server action that rejects makes the client fetch
+    // fail ("Load failed") and can wedge the UI. Always resolve with a result.
+    return { ok: false, errors: [(err as Error).message || 'Submit failed unexpectedly.'] };
   }
-
-  workspaceRepo.touchWorkspace(payload.workspaceId);
-  revalidatePath(`/workspace/${payload.workspaceId}`);
-
-  const next = nextImageToPresent(payload.workspaceId);
-  return {
-    ok: true,
-    outputs: result.outputs.relativePaths,
-    nextImageId: next?.image.id ?? null,
-  };
 }
 
 export async function skipImageAction(

@@ -44,6 +44,21 @@ const VIS_LABEL: Record<Visibility, string> = {
   NOT_VISIBLE: 'Not visible',
 };
 
+/**
+ * Turn a thrown action error into an annotator-facing message. A dead local
+ * backend makes a server action's POST reject with a WebKit/Chromium network
+ * error ("Load failed" / "Failed to fetch" / "NetworkError"); surface that as an
+ * actionable message rather than a raw fetch string, and reassure that the draft
+ * is kept in memory so nothing is lost.
+ */
+function describeActionError(err: unknown, fallback: string): string {
+  const msg = err instanceof Error ? err.message : String(err ?? '');
+  if (/load failed|failed to fetch|networkerror|network error/i.test(msg)) {
+    return 'Lost connection to the local DeshiA server — your draft is kept here. Please retry; if it persists, restart the app.';
+  }
+  return msg || fallback;
+}
+
 export interface WorkbenchImage {
   id: string;
   datasetIndex: number;
@@ -181,7 +196,7 @@ export function AnnotationWorkbench({
         else store.markError(res.error);
       } catch (err) {
         // A rejected server action must never leave the UI stuck on "Saving…".
-        store.markError(err instanceof Error ? err.message : 'Autosave failed unexpectedly.');
+        store.markError(describeActionError(err, 'Autosave failed unexpectedly.'));
       }
     }, 800);
     return () => clearTimeout(handle);
@@ -196,7 +211,7 @@ export function AnnotationWorkbench({
       if (res.ok) store.markSaved(res.savedAt);
       else store.markError(res.error);
     } catch (err) {
-      store.markError(err instanceof Error ? err.message : 'Save failed unexpectedly.');
+      store.markError(describeActionError(err, 'Save failed unexpectedly.'));
     }
   };
 
@@ -214,7 +229,7 @@ export function AnnotationWorkbench({
       if (res.ok) goToNext(res.nextImageId);
       else setSubmitErrors(res.errors);
     } catch (err) {
-      setSubmitErrors([err instanceof Error ? err.message : 'Submit failed unexpectedly.']);
+      setSubmitErrors([describeActionError(err, 'Submit failed unexpectedly.')]);
     } finally {
       setBusy(null);
     }
@@ -228,7 +243,7 @@ export function AnnotationWorkbench({
       if (res.ok) goToNext(res.nextImageId);
       else setSubmitErrors([res.error ?? 'Could not skip image.']);
     } catch (err) {
-      setSubmitErrors([err instanceof Error ? err.message : 'Skip failed unexpectedly.']);
+      setSubmitErrors([describeActionError(err, 'Skip failed unexpectedly.')]);
     } finally {
       setBusy(null);
     }
@@ -265,7 +280,7 @@ export function AnnotationWorkbench({
   // ---- empty state ----
   if (!image) {
     return (
-      <div className="flex min-h-screen flex-col bg-bg">
+      <div className="flex h-screen flex-col overflow-hidden bg-bg">
         <WorkspaceTopBar workspaceId={workspaceId} name={workspaceName} active="annotate" />
         <div className="grid flex-1 place-items-center px-6">
           <div className="max-w-md text-center">
@@ -285,7 +300,7 @@ export function AnnotationWorkbench({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-bg">
+    <div className="flex h-screen flex-col overflow-hidden bg-bg">
       <WorkspaceTopBar workspaceId={workspaceId} name={workspaceName} active="annotate" />
       {/* Image identity strip */}
       <div className="flex items-center justify-between border-b border-border bg-surface px-6 py-2">
@@ -303,7 +318,7 @@ export function AnnotationWorkbench({
         <AutosaveIndicator status={store.autosave} lastSavedAt={store.lastSavedAt} />
       </div>
 
-      <div className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(240px,20%)_minmax(0,1fr)_minmax(260px,20%)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(240px,20%)_minmax(0,1fr)_minmax(260px,20%)]">
         {/* LEFT — class/view + components */}
         <aside className="flex flex-col gap-4 overflow-y-auto border-r border-border bg-surface p-4">
           {/* PLACEHOLDER_LEFT */}
@@ -428,7 +443,7 @@ export function AnnotationWorkbench({
         </aside>
 
         {/* CENTER — canvas */}
-        <section className="relative min-h-[420px] bg-bg">
+        <section className="relative min-h-0 bg-bg">
           <AnnotationCanvas
             imageUrl={`/api/image/${image.id}`}
             naturalWidth={image.width}
