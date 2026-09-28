@@ -6,7 +6,7 @@
 
 **Deshi Annotation**
 
-An open-source, offline **desktop image-annotation workstation** for building structured computer-vision datasets — hierarchical labeling, bounding boxes, crash-safe progress, and reproducible multi-format export.
+An open-source, offline **desktop image-annotation workstation** for building structured computer-vision datasets — hierarchical labeling, bounding boxes, face-privacy mosaic, crash-safe progress, and reproducible multi-format export.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-3DA639.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-4DA3FF.svg)](CHANGELOG.md)
@@ -43,19 +43,20 @@ An open-source, offline **desktop image-annotation workstation** for building st
 
 Everything listed here is implemented today. Planned work lives in the [Roadmap](#roadmap).
 
-| Area                          | What it does                                                                                                                                                                                                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Workspaces**                | Point DeshiA at a read-only source folder and an output folder; it validates the paths and scaffolds the full `DeshiA_Output/` tree up front. Rename or delete workspaces — delete is DB-only, so your images and existing output are left untouched on disk. |
-| **Source scanning**           | Recursive discovery with **SHA-256** checksums, Sharp-read dimensions/metadata, and duplicate / unsupported-format classification. Duplicates are detected by content hash, never by filename.                                                                |
-| **Hierarchical labeling**     | Dataset → Class → View → Component, entirely resolved from the active schema. Changing the class changes the available views; changing the view changes the available components.                                                                             |
-| **Bounding boxes**            | A Konva canvas with draw / move / resize, normalized `0..1` storage, and live validation (`0 ≤ xMin < xMax ≤ 1`).                                                                                                                                             |
-| **Distinct semantic colors**  | A deterministic, perceptually separated, color-blind-aware palette assigned by component key — no two different components in one image ever share a color.                                                                                                   |
-| **Visibility states**         | Each component can be marked `VISIBLE`, `OCCLUDED`, or `NOT_VISIBLE`; the schema decides when a box is required.                                                                                                                                              |
-| **Autosave & crash recovery** | Drafts persist continuously inside transactions; an append-only `annotation_events` log makes any interrupted session resumable to exact state.                                                                                                               |
-| **Multi-format export**       | Every submission writes **Pascal VOC XML + COCO JSON + YOLO TXT** side by side, plus clean RAW / ANNOTATED image copies and a box-rendered preview — through a verified submission transaction.                                                               |
-| **Progress & inventory**      | A per-workspace dashboard with pending / in-progress / annotated / skipped counts, plus a read-only scan of what actually exists on disk, broken down by class and view.                                                                                      |
-| **Navigation**                | Dataset-order Previous / Next paging and one-click resume of the next pending image.                                                                                                                                                                          |
-| **Desktop app**               | Native folder pickers and a packaged installer (Tauri v2) that runs without a dev server. Fully offline.                                                                                                                                                      |
+| Area                          | What it does                                                                                                                                                                                                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Workspaces**                | Point DeshiA at a read-only source folder and an output folder; it validates the paths and scaffolds the full `DeshiA_Output/` tree up front. Rename or delete workspaces — delete is DB-only, so your images and existing output are left untouched on disk.     |
+| **Source scanning**           | Recursive discovery with **SHA-256** checksums, Sharp-read dimensions/metadata, and duplicate / unsupported-format classification. Duplicates are detected by content hash, never by filename.                                                                    |
+| **Hierarchical labeling**     | Dataset → Class → View → Component, entirely resolved from the active schema. Changing the class changes the available views; changing the view changes the available components.                                                                                 |
+| **Bounding boxes**            | A Konva canvas with draw / move / resize, normalized `0..1` storage, and live validation (`0 ≤ xMin < xMax ≤ 1`).                                                                                                                                                 |
+| **Distinct semantic colors**  | A deterministic, perceptually separated, color-blind-aware palette assigned by component key — no two different components in one image ever share a color.                                                                                                       |
+| **Visibility states**         | Each component can be marked `VISIBLE`, `OCCLUDED`, or `NOT_VISIBLE`; the schema decides when a box is required.                                                                                                                                                  |
+| **Privacy face mosaic**       | Hide human faces with a resizable circular tool. Each region is pixelated with a hard, **irreversible mosaic** baked into every exported copy (RAW, ANNOTATED, and visualizations) — source images are never modified, and redactions survive class/view changes. |
+| **Autosave & crash recovery** | Drafts persist continuously inside transactions; an append-only `annotation_events` log makes any interrupted session resumable to exact state.                                                                                                                   |
+| **Multi-format export**       | Every submission writes **Pascal VOC XML + COCO JSON + YOLO TXT** side by side, plus clean RAW / ANNOTATED image copies and a box-rendered preview — through a verified submission transaction.                                                                   |
+| **Progress & inventory**      | A per-workspace dashboard with pending / in-progress / annotated / skipped counts, plus a read-only scan of what actually exists on disk, broken down by class and view.                                                                                          |
+| **Navigation**                | Dataset-order Previous / Next paging and one-click resume of the next pending image.                                                                                                                                                                              |
+| **Desktop app**               | Native folder pickers and a packaged installer (Tauri v2) that runs without a dev server. Fully offline.                                                                                                                                                          |
 
 ## Annotation model
 
@@ -129,11 +130,19 @@ Every submitted image produces **all three** annotation formats at once — ther
 
 A single dataset-level `ANNOTATED/classes.txt` lists the class ids, derived from a deterministic whole-schema label map so ids stay consistent across every folder. See [`docs/export-format.md`](docs/export-format.md).
 
+### Face redaction (privacy)
+
+To publish datasets that contain people, DeshiA can **mosaic (pixelate) human faces** with a resizable circular tool.
+
+- **Irreversible by design.** Each circular region is averaged down to a handful of blocks (≤ 8 across its longer edge) and expanded back with hard, nearest-neighbour squares — a mosaic that destroys facial detail for good, not a soft blur that can leave a face recognizable.
+- **Baked into every copy.** The mosaic is applied to the RAW, ANNOTATED, and VISUALIZATIONS copies alike, because a face left un-masked in any one of them defeats the purpose. The **source image is never touched**.
+- **Resolution-independent & ontology-free.** Redactions are stored as normalized circles (`{ cx, cy, r }`), so they stay round at any resolution and **survive class/view changes** (unlike boxes, which reset). They are an export-time privacy layer, never part of the label set.
+
 ### Submission transaction
 
 Export runs inside one atomic flow (`src/core/exporter/submit.ts`), and **an image is marked `ANNOTATED` only after its files are verified on disk**:
 
-1. Validate annotation → 2. Persist to DB → 3. Generate VOC + COCO + YOLO + `classes.txt` → 4. Copy RAW image → 5. Copy clean ANNOTATED image, write annotation files, render the `VISUALIZATIONS` preview (best-effort) → 6. **Verify every dataset file exists and is non-empty** → 7. Update DB → 8. Mark `ANNOTATED` → 9. Load next `PENDING`.
+1. Validate annotation → 2. Persist to DB → 3. Generate VOC + COCO + YOLO + `classes.txt` → 4. Copy RAW image (any faces mosaicked in) → 5. Copy clean ANNOTATED image (faces mosaicked in), write annotation files, render the `VISUALIZATIONS` preview (best-effort) → 6. **Verify every dataset file exists and is non-empty** → 7. Update DB → 8. Mark `ANNOTATED` → 9. Load next `PENDING`.
 
 Any failure preserves the draft, surfaces an actionable error, and allows retry — nothing is ever silently lost, and no image is marked complete on a partial write.
 
@@ -287,6 +296,7 @@ Implemented:
 - [x] Autosave, append-only event log, and crash recovery
 - [x] Multi-format export — Pascal VOC, COCO, and YOLO — via a verified submission transaction
 - [x] Box-rendered visualizations kept separate from the clean dataset
+- [x] Privacy face-mosaic redaction baked into every exported copy
 - [x] Packaged desktop app (Tauri v2 + bundled Node server)
 
 Planned:

@@ -205,6 +205,52 @@ image still gets a valid, box-free preview. The tile layout is pure and
 deterministic (`layoutVizRects`) and every tile is clamped inside the image
 bounds, so previews are reproducible and never overflow the base image.
 
+## Face redaction (privacy mosaic)
+
+To publish datasets that contain people, DeshiA can **mosaic (pixelate) human
+faces** with a sizable circular tool. Redactions are stored
+resolution-independently on the annotation as `{ id, cx, cy, r }` — `cx`/`cy`
+are the circle center as a fraction of width/height (0..1) and `r` is the radius
+as a fraction of image **width** (so the circle stays round at any resolution,
+matching the canvas contain-fit). They are not tied to class/view/component, so
+they survive a class or view change (unlike boxes, which reset).
+
+The mosaic is **baked into every published copy — RAW, ANNOTATED, and
+VISUALIZATIONS** — because a face left un-masked in any one of them defeats the
+purpose. The **source image is never touched** (CLAUDE.md §4): each redaction is
+applied to a Sharp _copy_. A mosaic is used instead of a Gaussian blur on
+purpose — a blur only softens a face and can leave it recognizable, whereas
+averaging the region down to a handful of blocks destroys the detail
+irreversibly. For each circle DeshiA extracts the clamped bounding tile from the
+source, averages it down to a small grid (at most `MOSAIC_CELLS = 8` cells along
+the longer edge, aspect preserved), then expands that grid back to full size
+with **hard nearest-neighbour blocks** and a 1px-feathered circular alpha, and
+composites the masked patch back over the copy (`buildRedactionComposites` in
+`src/core/exporter/redaction-render.ts`). The block expansion is done by hand
+(not a Sharp enlarge) so the mosaic squares stay crisp regardless of how libvips
+would interpolate an upscale — a smooth enlarge would just be blur again. The
+geometry and pixelation math live in `src/core/annotation/redaction.ts` and are
+unit-tested.
+
+## Re-submission: overwrite, not duplicate
+
+Re-submitting an already-annotated image **overwrites its outputs in place — it
+never creates duplicates.** Every output filename is keyed to the image's
+persistent `datasetIndex` (not a directory file count), so the paths are stable
+across submissions and Sharp's `.toFile()` overwrites them; the draft save is an
+upsert keyed by `imageId`, so annotation rows are replaced rather than appended.
+
+The one exception is a **class or view change**: outputs live under
+`<class>/<view>/`, so re-submitting an image under a _different_ class/view
+writes to a new folder and leaves the previous copies stranded. On submit,
+DeshiA snapshots the prior successful export's paths
+(`latestSucceededExportForImage`), and after the new export commits it deletes
+any now-orphaned files (`computeOrphanPaths` + `removeOrphanOutputs` in
+`src/core/exporter/cleanup.ts`) and records an `ORPHANS_REMOVED` audit event.
+Files still present in the new export (e.g. the shared `classes.txt`) are
+retained. This cleanup is **best-effort and runs after the submit is already
+committed**, so it can never turn a good submission into a failure.
+
 ## Submission transaction
 
 Export happens inside the atomic submission flow (`src/core/exporter/submit.ts`):
@@ -212,11 +258,12 @@ Export happens inside the atomic submission flow (`src/core/exporter/submit.ts`)
 1. Validate annotation
 2. Persist annotation (DB)
 3. Generate VOC XML + COCO JSON + YOLO TXT + dataset-level `classes.txt`
-4. Copy RAW image
-5. Copy annotated (clean) image + write all annotation files, then render the
-   box-annotated `VISUALIZATIONS` preview (the only image with boxes). The
-   preview is **best-effort**: a render failure is logged and the preview is
-   skipped, never failing an otherwise-valid submission.
+4. Copy RAW image (with any face redactions mosaicked into the copy)
+5. Copy annotated (clean) image (redactions mosaicked in) + write all annotation
+   files, then render the box-annotated `VISUALIZATIONS` preview (the only image
+   with boxes; redactions mosaicked in here too). The preview is **best-effort**:
+   a render failure is logged and the preview is skipped, never failing an
+   otherwise-valid submission.
 6. **Verify** every dataset file (RAW, clean ANNOTATED, VOC/COCO/YOLO, and
    `classes.txt`) exists and is non-empty — the YOLO `.txt` may be 0 bytes when
    the image has no objects (a valid negative label). The preview is a human
@@ -228,4 +275,6 @@ Export happens inside the atomic submission flow (`src/core/exporter/submit.ts`)
 If any step fails, the annotation is preserved, the image is **not** marked
 complete, a useful error is shown, and the user can retry. `ANNOTATED` is set
 only after step 6. Every output path is confined to the output root
-(`assertInside`) before anything is written.
+(`assertInside`) before anything is written. After the transaction commits,
+a best-effort cleanup removes any outputs orphaned by a class/view change (see
+"Re-submission" above); it never affects the committed result.

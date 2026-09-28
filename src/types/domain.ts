@@ -7,13 +7,7 @@
  */
 
 /** Lifecycle status of a single image in a workspace. */
-export const IMAGE_STATUSES = [
-  'PENDING',
-  'IN_PROGRESS',
-  'ANNOTATED',
-  'SKIPPED',
-  'ERROR',
-] as const;
+export const IMAGE_STATUSES = ['PENDING', 'IN_PROGRESS', 'ANNOTATED', 'SKIPPED', 'ERROR'] as const;
 export type ImageStatus = (typeof IMAGE_STATUSES)[number];
 
 /** Component visibility state within an annotation. Schema decides box rules. */
@@ -25,14 +19,7 @@ export const ANNOTATION_STATUSES = ['DRAFT', 'SUBMITTED'] as const;
 export type AnnotationStatus = (typeof ANNOTATION_STATUSES)[number];
 
 /** Supported source image extensions (lower-case, no dot). */
-export const SUPPORTED_EXTENSIONS = [
-  'jpg',
-  'jpeg',
-  'png',
-  'webp',
-  'heic',
-  'heif',
-] as const;
+export const SUPPORTED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'] as const;
 export type SupportedExtension = (typeof SUPPORTED_EXTENSIONS)[number];
 
 /** Export formats emitted on every submission: Pascal VOC XML, COCO JSON, YOLO txt. */
@@ -75,6 +62,30 @@ export interface AnnotationBox {
   updatedAt: number;
 }
 
+/**
+ * A circular privacy-redaction region (e.g. a human face) marked for blurring.
+ *
+ * Stored resolution-independently: `cx`/`cy` are the center as a fraction of the
+ * image width/height (0..1), and `r` is the radius as a fraction of the image
+ * WIDTH. Keying the radius to a single axis (width) — the same axis the canvas
+ * contain-fit and the exporter both scale by — keeps the region perfectly round
+ * at any display size and at full export resolution. Unlike bounding boxes, a
+ * redaction is NOT tied to a class/view/component: a face is a face regardless
+ * of the annotation ontology, so redactions survive class/view changes.
+ *
+ * These are baked into the exported image copies (RAW + ANNOTATED +
+ * VISUALIZATIONS) only; the read-only source image is never modified.
+ */
+export interface RedactionCircle {
+  id: string;
+  /** Center X as a fraction of image width (0..1). */
+  cx: number;
+  /** Center Y as a fraction of image height (0..1). */
+  cy: number;
+  /** Radius as a fraction of image width (>0). */
+  r: number;
+}
+
 /** The full working annotation state for one image (draft or submitted). */
 export interface AnnotationState {
   imageId: string;
@@ -85,6 +96,8 @@ export interface AnnotationState {
   /** Per-component visibility, even for components with zero boxes. */
   componentVisibility: Record<string, Visibility>;
   boxes: AnnotationBox[];
+  /** Circular face/privacy regions blurred into exported image copies. */
+  redactions: RedactionCircle[];
   status: AnnotationStatus;
   annotationVersion: number;
   createdAt: number;
@@ -92,12 +105,7 @@ export interface AnnotationState {
 }
 
 /** Scanner-level classification of a discovered file. */
-export const SCAN_ENTRY_KINDS = [
-  'SUPPORTED',
-  'DUPLICATE',
-  'UNSUPPORTED',
-  'ERROR',
-] as const;
+export const SCAN_ENTRY_KINDS = ['SUPPORTED', 'DUPLICATE', 'UNSUPPORTED', 'ERROR'] as const;
 export type ScanEntryKind = (typeof SCAN_ENTRY_KINDS)[number];
 
 export type Theme = 'dark' | 'light' | 'system';

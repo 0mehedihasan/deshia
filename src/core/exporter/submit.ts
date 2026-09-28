@@ -20,6 +20,7 @@ import {
 import { generateCocoJson } from './coco';
 import { buildLabelMap, yoloClassesText } from './labelmap';
 import { ensureExportTarget } from './output-tree';
+import { buildRedactionComposites, type RedactionComposite } from './redaction-render';
 import { renderVisualization, type VizObject } from './visualization';
 import { generateVocXml, type VocObjectInput } from './voc';
 import { generateYoloTxt } from './yolo';
@@ -85,9 +86,22 @@ async function verifyWritten(filePath: string, allowEmpty = false): Promise<void
   }
 }
 
-/** Copy a source image into `dest` as a clean image (never drawing boxes). */
-async function copyCleanImage(src: string, dest: string, ext: string): Promise<void> {
-  const pipeline = sharp(src, { failOn: 'none' });
+/**
+ * Copy a source image into `dest` (never drawing annotation boxes), optionally
+ * baking in face-redaction blur patches. RAW and ANNOTATED both use this: they
+ * stay free of any drawn boxes (§10), but faces marked for privacy are blurred
+ * into every published copy. The read-only source is only ever read.
+ */
+async function writeImageCopy(
+  src: string,
+  dest: string,
+  ext: string,
+  redactionComposites: RedactionComposite[],
+): Promise<void> {
+  let pipeline = sharp(src, { failOn: 'none' });
+  if (redactionComposites.length > 0) {
+    pipeline = pipeline.composite(redactionComposites);
+  }
   if (outputImageExt(ext) === 'png') {
     await pipeline.png().toFile(dest);
   } else {
@@ -195,10 +209,25 @@ export async function exportImage(params: {
     );
     const classesTxt = yoloClassesText(labelMap);
 
-    // 4. Copy RAW (clean) image.
-    await copyCleanImage(image.originalPath, rawImagePath, image.extension);
-    // 5. Copy ANNOTATED (clean) image + write every annotation file.
-    await copyCleanImage(image.originalPath, annotatedImagePath, image.extension);
+    // Face/privacy blur patches, computed once from the source and baked into
+    // every published copy (RAW + ANNOTATED + VISUALIZATIONS). Empty when the
+    // annotator marked no faces, so the no-redaction path is unchanged. The
+    // source image itself is never modified (golden rule #4).
+    const redactionComposites = await buildRedactionComposites(
+      image.originalPath,
+      { width: image.width, height: image.height },
+      state.redactions ?? [],
+    );
+
+    // 4. Copy RAW image (no boxes; faces blurred if any).
+    await writeImageCopy(image.originalPath, rawImagePath, image.extension, redactionComposites);
+    // 5. Copy ANNOTATED image (no boxes; faces blurred if any) + annotation files.
+    await writeImageCopy(
+      image.originalPath,
+      annotatedImagePath,
+      image.extension,
+      redactionComposites,
+    );
     await writeFile(annotationXmlPath, xml, 'utf8');
     await writeFile(annotationCocoPath, cocoJson, 'utf8');
     await writeFile(annotationYoloPath, yoloTxt, 'utf8');
@@ -217,6 +246,7 @@ export async function exportImage(params: {
         ext: image.extension,
         size: { width: image.width, height: image.height },
         objects: vizObjects,
+        redactionComposites,
       });
       await verifyWritten(visualizationImagePath);
       visualizationRendered = true;

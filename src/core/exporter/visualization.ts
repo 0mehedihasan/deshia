@@ -2,6 +2,7 @@ import sharp from 'sharp';
 import { hexToRgb, type AnnotationColor } from '@/core/annotation/palette';
 import type { ImageSize, NormalizedBox } from '@/types/domain';
 import { outputImageExt } from './filenames';
+import type { RedactionComposite } from './redaction-render';
 
 /**
  * Box-rendered preview images for the VISUALIZATIONS/ tree.
@@ -87,7 +88,9 @@ export function layoutVizRects(size: ImageSize, objects: VizObject[]): VizRect[]
  * source (Sharp reads it, composites tiles, writes a fresh file). The overlay is
  * laid out against the source's ACTUAL decoded dimensions so every tile is
  * guaranteed to fit inside the base — an overflowing composite input would make
- * libvips reject the whole operation.
+ * libvips reject the whole operation. Any face-redaction patches are composited
+ * FIRST (under the boxes) so the preview shows the same blurred faces the RAW
+ * and ANNOTATED copies carry, with the annotation boxes drawn on top.
  */
 export async function renderVisualization(params: {
   srcPath: string;
@@ -95,6 +98,7 @@ export async function renderVisualization(params: {
   ext: string;
   size: ImageSize;
   objects: VizObject[];
+  redactionComposites?: RedactionComposite[];
 }): Promise<void> {
   const meta = await sharp(params.srcPath, { failOn: 'none' }).metadata();
   const size: ImageSize = {
@@ -120,7 +124,8 @@ export async function renderVisualization(params: {
     })),
   );
 
-  const pipeline = sharp(params.srcPath, { failOn: 'none' }).composite(overlays);
+  const composites = [...(params.redactionComposites ?? []), ...overlays];
+  const pipeline = sharp(params.srcPath, { failOn: 'none' }).composite(composites);
   if (outputImageExt(params.ext) === 'png') {
     await pipeline.png().toFile(params.destPath);
   } else {

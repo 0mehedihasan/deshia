@@ -12,8 +12,10 @@ import type {
   AnnotationBox,
   AnnotationState,
   AnnotationStatus,
+  RedactionCircle,
   Visibility,
 } from '@/types/domain';
+import { clampRedaction } from '@/core/annotation/redaction';
 import { newId } from './ids';
 
 /**
@@ -35,6 +37,8 @@ export interface DraftInput {
   viewKey: string | null;
   componentVisibility: Record<string, Visibility>;
   boxes: Array<Pick<AnnotationBox, 'componentKey' | 'box' | 'visibility'>>;
+  /** Circular face/privacy regions to blur into exported copies. */
+  redactions: RedactionCircle[];
 }
 
 function parseVisibility(json: string): Record<string, Visibility> {
@@ -49,6 +53,30 @@ function parseVisibility(json: string): Record<string, Visibility> {
   return {};
 }
 
+/**
+ * Parse the persisted redactions JSON into a clean, validated array. Any
+ * malformed entry is dropped (never throws) so a corrupt column can never lose
+ * the rest of an annotation or wedge the workbench.
+ */
+function parseRedactions(json: string): RedactionCircle[] {
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const out: RedactionCircle[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue;
+      const { id, cx, cy, r } = item as Record<string, unknown>;
+      if (typeof id !== 'string') continue;
+      if (typeof cx !== 'number' || typeof cy !== 'number' || typeof r !== 'number') continue;
+      const cleaned = clampRedaction({ id, cx, cy, r });
+      if (cleaned) out.push(cleaned);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 function rowToState(annotation: AnnotationRow, boxes: BoundingBoxRow[]): AnnotationState {
   return {
     imageId: annotation.imageId,
@@ -57,6 +85,7 @@ function rowToState(annotation: AnnotationRow, boxes: BoundingBoxRow[]): Annotat
     classKey: annotation.classKey,
     viewKey: annotation.viewKey,
     componentVisibility: parseVisibility(annotation.componentVisibility),
+    redactions: parseRedactions(annotation.redactions),
     status: annotation.status as AnnotationStatus,
     annotationVersion: annotation.annotationVersion,
     createdAt: annotation.createdAt,
@@ -90,7 +119,11 @@ export function getAnnotationByImage(imageId: string): AnnotationState | undefin
 export function saveDraft(input: DraftInput): AnnotationState {
   return db.transaction((tx) => {
     const ts = Date.now();
-    const existing = tx.select().from(annotations).where(eq(annotations.imageId, input.imageId)).get();
+    const existing = tx
+      .select()
+      .from(annotations)
+      .where(eq(annotations.imageId, input.imageId))
+      .get();
 
     let annotationId: string;
     if (existing) {
@@ -102,6 +135,7 @@ export function saveDraft(input: DraftInput): AnnotationState {
           schemaId: input.schemaId,
           schemaVersion: input.schemaVersion,
           componentVisibility: JSON.stringify(input.componentVisibility),
+          redactions: JSON.stringify(input.redactions),
           status: 'DRAFT',
           updatedAt: ts,
         })
@@ -122,6 +156,7 @@ export function saveDraft(input: DraftInput): AnnotationState {
           annotationVersion: 1,
           status: 'DRAFT',
           componentVisibility: JSON.stringify(input.componentVisibility),
+          redactions: JSON.stringify(input.redactions),
           createdAt: ts,
           updatedAt: ts,
         })
@@ -157,6 +192,7 @@ export function saveDraft(input: DraftInput): AnnotationState {
           viewKey: input.viewKey,
           componentVisibility: input.componentVisibility,
           boxes: input.boxes,
+          redactions: input.redactions,
         }),
         createdAt: ts,
       })
@@ -165,11 +201,18 @@ export function saveDraft(input: DraftInput): AnnotationState {
     // Draft progress: PENDING → IN_PROGRESS (never ANNOTATED here).
     const img = tx.select().from(images).where(eq(images.id, input.imageId)).get();
     if (img && img.status === 'PENDING') {
-      tx.update(images).set({ status: 'IN_PROGRESS', updatedAt: ts }).where(eq(images.id, input.imageId)).run();
+      tx.update(images)
+        .set({ status: 'IN_PROGRESS', updatedAt: ts })
+        .where(eq(images.id, input.imageId))
+        .run();
     }
 
     const saved = tx.select().from(annotations).where(eq(annotations.id, annotationId)).get()!;
-    const boxes = tx.select().from(boundingBoxes).where(eq(boundingBoxes.annotationId, annotationId)).all();
+    const boxes = tx
+      .select()
+      .from(boundingBoxes)
+      .where(eq(boundingBoxes.annotationId, annotationId))
+      .all();
     return rowToState(saved, boxes);
   });
 }
@@ -205,7 +248,11 @@ export function markSubmitted(imageId: string): AnnotationState {
       })
       .run();
     const saved = tx.select().from(annotations).where(eq(annotations.id, annotation.id)).get()!;
-    const boxes = tx.select().from(boundingBoxes).where(eq(boundingBoxes.annotationId, annotation.id)).all();
+    const boxes = tx
+      .select()
+      .from(boundingBoxes)
+      .where(eq(boundingBoxes.annotationId, annotation.id))
+      .all();
     return rowToState(saved, boxes);
   });
 }

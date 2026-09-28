@@ -12,6 +12,7 @@ function baseState(overrides: Partial<AnnotationState> = {}): AnnotationState {
     viewKey: 'front',
     componentVisibility: {},
     boxes: [],
+    redactions: [],
     status: 'DRAFT',
     annotationVersion: 1,
     createdAt: 0,
@@ -43,8 +44,22 @@ describe('annotation validation', () => {
       baseState({
         componentVisibility: { rickshaw_body: 'VISIBLE', steering_head: 'VISIBLE' },
         boxes: [
-          { id: 'b1', componentKey: 'rickshaw_body', box: fullBox, visibility: 'VISIBLE', createdAt: now, updatedAt: now },
-          { id: 'b2', componentKey: 'steering_head', box: { xMin: 0.2, yMin: 0.2, xMax: 0.4, yMax: 0.4 }, visibility: 'VISIBLE', createdAt: now, updatedAt: now },
+          {
+            id: 'b1',
+            componentKey: 'rickshaw_body',
+            box: fullBox,
+            visibility: 'VISIBLE',
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'b2',
+            componentKey: 'steering_head',
+            box: { xMin: 0.2, yMin: 0.2, xMax: 0.4, yMax: 0.4 },
+            visibility: 'VISIBLE',
+            createdAt: now,
+            updatedAt: now,
+          },
         ],
       }),
     );
@@ -59,7 +74,14 @@ describe('annotation validation', () => {
       baseState({
         componentVisibility: { rickshaw_body: 'VISIBLE', steering_head: 'NOT_VISIBLE' },
         boxes: [
-          { id: 'b1', componentKey: 'rickshaw_body', box: fullBox, visibility: 'VISIBLE', createdAt: now, updatedAt: now },
+          {
+            id: 'b1',
+            componentKey: 'rickshaw_body',
+            box: fullBox,
+            visibility: 'VISIBLE',
+            createdAt: now,
+            updatedAt: now,
+          },
         ],
       }),
     );
@@ -73,9 +95,30 @@ describe('annotation validation', () => {
       baseState({
         componentVisibility: { rickshaw_body: 'VISIBLE', steering_head: 'VISIBLE' },
         boxes: [
-          { id: 'b1', componentKey: 'rickshaw_body', box: fullBox, visibility: 'VISIBLE', createdAt: now, updatedAt: now },
-          { id: 'b2', componentKey: 'steering_head', box: fullBox, visibility: 'VISIBLE', createdAt: now, updatedAt: now },
-          { id: 'b3', componentKey: 'chain', box: fullBox, visibility: 'VISIBLE', createdAt: now, updatedAt: now },
+          {
+            id: 'b1',
+            componentKey: 'rickshaw_body',
+            box: fullBox,
+            visibility: 'VISIBLE',
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'b2',
+            componentKey: 'steering_head',
+            box: fullBox,
+            visibility: 'VISIBLE',
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'b3',
+            componentKey: 'chain',
+            box: fullBox,
+            visibility: 'VISIBLE',
+            createdAt: now,
+            updatedAt: now,
+          },
         ],
       }),
     );
@@ -90,7 +133,14 @@ describe('annotation validation', () => {
       baseState({
         componentVisibility: { rickshaw_body: 'VISIBLE', steering_head: 'NOT_VISIBLE' },
         boxes: [
-          { id: 'b1', componentKey: 'rickshaw_body', box: { xMin: 0.9, yMin: 0.9, xMax: 0.1, yMax: 0.1 }, visibility: 'VISIBLE', createdAt: now, updatedAt: now },
+          {
+            id: 'b1',
+            componentKey: 'rickshaw_body',
+            box: { xMin: 0.9, yMin: 0.9, xMax: 0.1, yMax: 0.1 },
+            visibility: 'VISIBLE',
+            createdAt: now,
+            updatedAt: now,
+          },
         ],
       }),
     );
@@ -111,8 +161,22 @@ describe('annotation validation', () => {
           pedal: 'NOT_VISIBLE',
         },
         boxes: [
-          { id: 'b1', componentKey: 'e_rickshaw_body', box: fullBox, visibility: 'VISIBLE', createdAt: now, updatedAt: now },
-          { id: 'b2', componentKey: 'electric_drive_area', box: { xMin: 0.3, yMin: 0.3, xMax: 0.6, yMax: 0.6 }, visibility: 'VISIBLE', createdAt: now, updatedAt: now },
+          {
+            id: 'b1',
+            componentKey: 'e_rickshaw_body',
+            box: fullBox,
+            visibility: 'VISIBLE',
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'b2',
+            componentKey: 'electric_drive_area',
+            box: { xMin: 0.3, yMin: 0.3, xMax: 0.6, yMax: 0.6 },
+            visibility: 'VISIBLE',
+            createdAt: now,
+            updatedAt: now,
+          },
         ],
       }),
     );

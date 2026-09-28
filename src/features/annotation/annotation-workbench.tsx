@@ -12,6 +12,7 @@ import {
   Loader2,
   Pencil,
   RotateCcw,
+  ScanFace,
   SkipForward,
   Trash2,
 } from 'lucide-react';
@@ -106,6 +107,10 @@ export function AnnotationWorkbench({
   const { draft } = store;
 
   const [activeComponentKey, setActiveComponentKey] = React.useState<string | null>(null);
+  // Face-blur tool arm state. Mutually exclusive with box drawing (arming one
+  // disarms the other) so a press has exactly one meaning. It is a sticky mode:
+  // it stays on so several faces can be blurred in a row until Esc / toggle off.
+  const [blurArmed, setBlurArmed] = React.useState(false);
   const [busy, setBusy] = React.useState<null | 'submit' | 'skip'>(null);
   const [submitErrors, setSubmitErrors] = React.useState<string[]>([]);
 
@@ -126,9 +131,11 @@ export function AnnotationWorkbench({
         viewKey: null,
         componentVisibility: {},
         boxes: [],
+        redactions: [],
       });
     }
     setActiveComponentKey(null);
+    setBlurArmed(false);
     setSubmitErrors([]);
     // Only re-init when the target image changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,6 +177,7 @@ export function AnnotationWorkbench({
       viewKey: draft.viewKey,
       componentVisibility: draft.componentVisibility,
       boxes: draft.boxes,
+      redactions: draft.redactions,
       status: 'DRAFT',
       annotationVersion: 1,
       createdAt: 0,
@@ -182,11 +190,13 @@ export function AnnotationWorkbench({
   const selectClass = (key: string) => {
     store.setClass(key);
     setActiveComponentKey(null);
+    setBlurArmed(false);
   };
 
   const selectView = (key: string) => {
     store.setView(key);
     setActiveComponentKey(null);
+    setBlurArmed(false);
     // Seed default visibility for each component of the new view.
     for (const c of resolveComponents(schema, classKey!, key)) {
       store.setVisibility(c.key, defaultVisibility(c));
@@ -204,6 +214,7 @@ export function AnnotationWorkbench({
       box: b.box,
       visibility: b.visibility,
     })),
+    redactions: draft!.redactions,
   });
 
   // Debounced autosave whenever the draft is dirty.
@@ -277,7 +288,21 @@ export function AnnotationWorkbench({
 
   const armDraw = (componentKey: string) => {
     setActiveComponentKey((k) => (k === componentKey ? null : componentKey));
+    setBlurArmed(false);
     store.selectBox(null);
+  };
+
+  // Toggle the face-blur tool. Arming it disarms box drawing and drops the box
+  // selection so the next press means "start a blur circle" unambiguously.
+  const armBlur = () => {
+    setBlurArmed((on) => {
+      const next = !on;
+      if (next) {
+        setActiveComponentKey(null);
+        store.selectBox(null);
+      }
+      return next;
+    });
   };
 
   const boxCountFor = (key: string) =>
@@ -295,14 +320,18 @@ export function AnnotationWorkbench({
         viewKey: null,
         componentVisibility: {},
         boxes: [],
+        redactions: [],
       });
     setActiveComponentKey(null);
+    setBlurArmed(false);
     setSubmitErrors([]);
   };
 
   const activeColor = activeComponentKey ? (colors.get(activeComponentKey)?.border ?? null) : null;
   const canSubmit = !!validation?.ok && !busy;
   const selectedBox = draft?.boxes.find((b) => b.id === store.selectedBoxId) ?? null;
+  const selectedRedaction =
+    draft?.redactions.find((c) => c.id === store.selectedRedactionId) ?? null;
 
   // Canvas keyboard shortcuts. Escape cancels an armed draw, then clears the
   // selection; Delete/Backspace removes the selected box. Guarded so typing in a
@@ -320,22 +349,28 @@ export function AnnotationWorkbench({
           el.isContentEditable);
       const s = useAnnotationStore.getState();
       if (e.key === 'Escape') {
+        // Peel state back one layer at a time: disarm the active tool first,
+        // then clear whichever object is selected (box takes priority).
         if (activeComponentKey) setActiveComponentKey(null);
+        else if (blurArmed) setBlurArmed(false);
         else if (s.selectedBoxId) s.selectBox(null);
+        else if (s.selectedRedactionId) s.selectRedaction(null);
         return;
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && !busy) {
         // Always suppress the default first: outside an input a bare Backspace
         // triggers browser "back" navigation in dev/browser mode, which would
         // blow away the annotation screen. Delete has no default, so this is a
-        // no-op for it. Only then remove, and only if a box is actually selected.
+        // no-op for it. Then remove the selected box, or else the selected
+        // face-blur circle when no box is selected.
         e.preventDefault();
         if (s.selectedBoxId) s.removeBox(s.selectedBoxId);
+        else if (s.selectedRedactionId) s.removeRedaction(s.selectedRedactionId);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeComponentKey, busy]);
+  }, [activeComponentKey, blurArmed, busy]);
 
   // ---- empty state ----
   if (!image) {
@@ -433,6 +468,35 @@ export function AnnotationWorkbench({
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Face mosaic (privacy) — independent of the class/view ontology, so it
+              lives in its own card and its circles survive class/view changes. */}
+          <div className="rounded-lg border border-border bg-elevated p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="h-3 w-3 flex-none rounded-full bg-warning" />
+                <span className="truncate text-meta-lg font-medium text-text">Face mosaic</span>
+              </div>
+              {(draft?.redactions.length ?? 0) > 0 && (
+                <Badge tone="neutral" mono>
+                  {draft?.redactions.length}
+                </Badge>
+              )}
+            </div>
+            <p className="mt-1 text-meta text-muted">
+              Pixelate human faces for privacy — a hard mosaic that cannot be reversed. Baked into
+              every exported copy; your source images are never modified.
+            </p>
+            <Button
+              size="sm"
+              variant={blurArmed ? 'primary' : 'secondary'}
+              className="mt-2 w-full"
+              onClick={armBlur}
+            >
+              <ScanFace className="h-3.5 w-3.5" />
+              {blurArmed ? 'Placing mosaic… (click to stop)' : 'Mosaic a face'}
+            </Button>
           </div>
 
           <div className="flex-1">
@@ -541,6 +605,17 @@ export function AnnotationWorkbench({
             }}
             onUpdateBox={(id, box) => store.updateBox(id, box)}
             onSelectBox={(id) => store.selectBox(id)}
+            redactions={draft?.redactions ?? []}
+            selectedRedactionId={store.selectedRedactionId}
+            blurArmed={blurArmed}
+            onDrawRedaction={(cx, cy, r) => {
+              // Sticky mode: keep the tool armed so the annotator can blur
+              // several faces in a row. A sub-threshold flick returns null and
+              // is silently ignored by the store.
+              store.addRedaction(cx, cy, r);
+            }}
+            onUpdateRedaction={(id, patch) => store.updateRedaction(id, patch)}
+            onSelectRedaction={(id) => store.selectRedaction(id)}
           />
           {activeComponentKey && (
             <div className="bg-elevated/95 pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md border border-border-strong px-3 py-1 text-meta-lg text-text-secondary shadow">
@@ -549,6 +624,11 @@ export function AnnotationWorkbench({
                 {components.find((c) => c.key === activeComponentKey)?.label ?? activeComponentKey}
               </span>{' '}
               — drag on the image · Esc to cancel
+            </div>
+          )}
+          {blurArmed && (
+            <div className="bg-elevated/95 border-warning/60 pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md border px-3 py-1 text-meta-lg text-text-secondary shadow">
+              Face mosaic — click a face and drag outward to size the circle · Esc when done
             </div>
           )}
         </section>
@@ -599,6 +679,70 @@ export function AnnotationWorkbench({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Face-mosaic circles: privacy regions, not ontology objects. Each row
+              selects its circle, resizes it (slider), or removes it. */}
+          <div>
+            <h3 className="mb-2 text-meta font-medium uppercase tracking-wide text-muted">
+              Face mosaic ({draft?.redactions.length ?? 0})
+            </h3>
+            {(draft?.redactions.length ?? 0) === 0 ? (
+              <p className="text-meta-lg text-muted">
+                No faces masked. Use “Mosaic a face” on the left, then drag outward from the center
+                of a face.
+              </p>
+            ) : (
+              <ul className="space-y-1.5">
+                {(draft?.redactions ?? []).map((c, i) => {
+                  const selected = store.selectedRedactionId === c.id;
+                  return (
+                    <li
+                      key={c.id}
+                      className={
+                        'rounded-md border px-2 py-1.5 ' +
+                        (selected ? 'bg-warning/5 border-warning' : 'border-border bg-elevated')
+                      }
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => store.selectRedaction(selected ? null : c.id)}
+                          className="flex min-w-0 items-center gap-2 text-left"
+                        >
+                          <span className="h-3 w-3 flex-none rounded-full bg-warning" />
+                          <span className="truncate text-meta-lg text-text">Face {i + 1}</span>
+                        </button>
+                        <div className="flex flex-none items-center gap-1.5">
+                          <span className="font-mono text-meta tabular-nums text-muted">
+                            ⌀{Math.round(c.r * 200)}%
+                          </span>
+                          <button
+                            type="button"
+                            aria-label="Remove face mosaic"
+                            onClick={() => store.removeRedaction(c.id)}
+                            className="hover:bg-error/10 rounded p-1 text-muted transition-colors hover:text-error"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.01}
+                        max={1}
+                        step={0.005}
+                        value={c.r}
+                        onMouseDown={() => store.selectRedaction(c.id)}
+                        onChange={(e) => store.updateRedaction(c.id, { r: Number(e.target.value) })}
+                        className="mt-1.5 w-full accent-warning"
+                        aria-label="Mosaic circle size"
+                      />
                     </li>
                   );
                 })}
@@ -660,6 +804,13 @@ export function AnnotationWorkbench({
             <p className="text-meta text-muted">
               Selected box: drag to move, resize with the handles, or press Delete to remove. Esc
               clears the selection.
+            </p>
+          )}
+
+          {selectedRedaction && !selectedBox && (
+            <p className="text-meta text-muted">
+              Selected face mosaic: drag to move, resize with the handles or the slider above, or
+              press Delete to remove. Esc clears the selection.
             </p>
           )}
         </aside>

@@ -1,12 +1,5 @@
 import { sql } from 'drizzle-orm';
-import {
-  index,
-  integer,
-  real,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 /**
  * DeshiA persistence schema (SQLite / Drizzle).
@@ -84,6 +77,8 @@ export const annotations = sqliteTable(
     status: text('status').notNull().default('DRAFT'),
     /** JSON: Record<componentKey, Visibility>. */
     componentVisibility: text('component_visibility').notNull().default('{}'),
+    /** JSON: RedactionCircle[] — circular face/privacy regions to blur on export. */
+    redactions: text('redactions').notNull().default('[]'),
     createdAt: integer('created_at').notNull().default(now),
     updatedAt: integer('updated_at').notNull().default(now),
   },

@@ -10,9 +10,10 @@ import {
   workspaceRepo,
 } from '@/db/repositories';
 import { exportImage } from '@/core/exporter/submit';
+import { computeOrphanPaths, removeOrphanOutputs } from '@/core/exporter/cleanup';
 import { nextImageToPresent } from '@/core/recovery/detect';
 import { getBuiltInSchema } from '@/schemas';
-import type { NormalizedBox, Visibility } from '@/types/domain';
+import type { NormalizedBox, RedactionCircle, Visibility } from '@/types/domain';
 
 /**
  * Annotation application service — the data-safety-critical path.
@@ -30,6 +31,8 @@ export interface DraftPayload {
   viewKey: string | null;
   componentVisibility: Record<string, Visibility>;
   boxes: Array<{ componentKey: string; box: NormalizedBox; visibility: Visibility }>;
+  /** Circular face/privacy regions to blur into every exported copy. */
+  redactions: RedactionCircle[];
 }
 
 export type SaveDraftResult = { ok: true; savedAt: number } | { ok: false; error: string };
@@ -48,6 +51,7 @@ export async function saveDraftAction(payload: DraftPayload): Promise<SaveDraftR
       viewKey: payload.viewKey,
       componentVisibility: payload.componentVisibility,
       boxes: payload.boxes,
+      redactions: payload.redactions,
     });
     return { ok: true, savedAt: Date.now() };
   } catch (err) {
@@ -77,6 +81,11 @@ export async function submitImageAction(payload: DraftPayload): Promise<SubmitRe
     const image = imageRepo.getImage(payload.imageId);
     if (!image) return { ok: false, errors: ['Image not found.'] };
 
+    // Snapshot the previous successful export BEFORE writing new files. If this
+    // submit lands in a different class/view folder, we use this to delete the
+    // now-stale copies afterward (see the post-commit cleanup below).
+    const prevExport = exportJobRepo.latestSucceededExportForImage(payload.imageId);
+
     // 1–2. Persist the draft first so nothing is lost even if export fails.
     let state;
     try {
@@ -89,6 +98,7 @@ export async function submitImageAction(payload: DraftPayload): Promise<SubmitRe
         viewKey: payload.viewKey,
         componentVisibility: payload.componentVisibility,
         boxes: payload.boxes,
+        redactions: payload.redactions,
       });
     } catch (err) {
       return { ok: false, errors: [`Could not persist draft: ${(err as Error).message}`] };
@@ -141,6 +151,24 @@ export async function submitImageAction(payload: DraftPayload): Promise<SubmitRe
     // here must not turn a good submit into an error — degrade to "no next".
     let nextImageId: string | null = null;
     try {
+      // Remove any outputs orphaned by a class/view change on re-submission.
+      // Filenames key off datasetIndex, so a same-class/view re-submit overwrites
+      // in place; only a folder change strands the old copies. Best-effort — the
+      // submit is already committed, so cleanup never fails it. The deletion is
+      // recorded in the append-only event log for auditability.
+      if (prevExport) {
+        const orphans = computeOrphanPaths(prevExport.outputs, result.outputs.relativePaths);
+        if (orphans.length > 0) {
+          const removed = await removeOrphanOutputs(ws.outputDir, orphans);
+          if (removed.length > 0) {
+            eventRepo.appendEvent({
+              imageId: payload.imageId,
+              kind: 'ORPHANS_REMOVED',
+              payload: { removed },
+            });
+          }
+        }
+      }
       workspaceRepo.touchWorkspace(payload.workspaceId);
       revalidatePath(`/workspace/${payload.workspaceId}`);
       nextImageId = nextImageToPresent(payload.workspaceId)?.image.id ?? null;
