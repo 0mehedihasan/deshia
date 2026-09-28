@@ -304,6 +304,39 @@ export function AnnotationWorkbench({
   const canSubmit = !!validation?.ok && !busy;
   const selectedBox = draft?.boxes.find((b) => b.id === store.selectedBoxId) ?? null;
 
+  // Canvas keyboard shortcuts. Escape cancels an armed draw, then clears the
+  // selection; Delete/Backspace removes the selected box. Guarded so typing in a
+  // form control (class/view selects, inputs) never deletes a box, and disabled
+  // while a submit/skip is in flight. State is read via getState() so the handler
+  // always sees the latest selection without re-subscribing on every change.
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      const typing =
+        el instanceof HTMLElement &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          el.isContentEditable);
+      const s = useAnnotationStore.getState();
+      if (e.key === 'Escape') {
+        if (activeComponentKey) setActiveComponentKey(null);
+        else if (s.selectedBoxId) s.selectBox(null);
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && !busy) {
+        // Always suppress the default first: outside an input a bare Backspace
+        // triggers browser "back" navigation in dev/browser mode, which would
+        // blow away the annotation screen. Delete has no default, so this is a
+        // no-op for it. Only then remove, and only if a box is actually selected.
+        e.preventDefault();
+        if (s.selectedBoxId) s.removeBox(s.selectedBoxId);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeComponentKey, busy]);
+
   // ---- empty state ----
   if (!image) {
     return (
@@ -515,7 +548,7 @@ export function AnnotationWorkbench({
               <span className="font-medium text-text">
                 {components.find((c) => c.key === activeComponentKey)?.label ?? activeComponentKey}
               </span>{' '}
-              — drag on the image
+              — drag on the image · Esc to cancel
             </div>
           )}
         </section>
@@ -625,7 +658,8 @@ export function AnnotationWorkbench({
 
           {selectedBox && (
             <p className="text-meta text-muted">
-              Selected box: drag to move, use handles to resize on the canvas.
+              Selected box: drag to move, resize with the handles, or press Delete to remove. Esc
+              clears the selection.
             </p>
           )}
         </aside>

@@ -1,9 +1,18 @@
 'use client';
 
 import * as React from 'react';
-import { Image as KonvaImage, Label, Layer, Rect, Stage, Tag, Text, Transformer } from 'react-konva';
+import {
+  Image as KonvaImage,
+  Label,
+  Layer,
+  Rect,
+  Stage,
+  Tag,
+  Text,
+  Transformer,
+} from 'react-konva';
 import type Konva from 'konva';
-import { normalizedBoxFromCorners } from '@/core/annotation/bbox';
+import { computeContainFit, normalizedBoxFromCorners } from '@/core/annotation/bbox';
 import type { NormalizedBox } from '@/types/domain';
 
 /**
@@ -39,24 +48,13 @@ export interface AnnotationCanvasProps {
   onSelectBox: (id: string | null) => void;
 }
 
-interface Fit {
-  scale: number;
-  offsetX: number;
-  offsetY: number;
-}
-
-function computeFit(stageW: number, stageH: number, natW: number, natH: number): Fit {
-  if (natW <= 0 || natH <= 0) return { scale: 1, offsetX: 0, offsetY: 0 };
-  const scale = Math.min(stageW / natW, stageH / natH);
-  return {
-    scale,
-    offsetX: (stageW - natW * scale) / 2,
-    offsetY: (stageH - natH * scale) / 2,
-  };
-}
-
 export function AnnotationCanvas(props: AnnotationCanvasProps) {
-  const { naturalWidth, naturalHeight, boxes, selectedBoxId, activeComponentKey, activeColor } = props;
+  const { naturalWidth, naturalHeight, boxes, selectedBoxId, activeComponentKey, activeColor } =
+    props;
+
+  // While a component is armed for drawing, existing boxes are frozen (not
+  // listening) so a press over one starts a new box instead of dragging it.
+  const armed = activeComponentKey !== null;
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [size, setSize] = React.useState({ width: 0, height: 0 });
@@ -85,7 +83,7 @@ export function AnnotationCanvas(props: AnnotationCanvasProps) {
     return () => ro.disconnect();
   }, []);
 
-  const fit = computeFit(size.width, size.height, naturalWidth, naturalHeight);
+  const fit = computeContainFit(size.width, size.height, naturalWidth, naturalHeight);
   const pxW = naturalWidth * fit.scale;
   const pxH = naturalHeight * fit.scale;
 
@@ -108,53 +106,88 @@ export function AnnotationCanvas(props: AnnotationCanvasProps) {
   );
 
   // ---- new-box drawing ----
-  const [draft, setDraft] = React.useState<{ x0: number; y0: number; x1: number; y1: number } | null>(
-    null,
-  );
+  const [draft, setDraft] = React.useState<{
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  } | null>(null);
 
   const onStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
-    // "Empty area" = the bare stage background or the source image itself.
-    // A box (name "box") or a Transformer resize handle is NOT empty area, and
-    // must never clear the selection: deselecting mid-gesture unmounts the
-    // Transformer and aborts the very move/resize the user just started (this
-    // was the "can't move / resize a box" bug).
-    const isEmptyArea = e.target === stage || e.target.name() === 'bg';
 
     if (activeComponentKey) {
-      // Armed to draw: only begin a rubber-band from empty canvas / the image,
-      // never on top of an existing box or its handles.
-      if (!isEmptyArea) return;
+      // Armed to draw: a press ANYWHERE on the canvas begins a new rubber-band —
+      // including directly on top of an existing box. While armed, existing
+      // boxes are made non-interactive (`listening={false}`, see `armed` on
+      // <BoxShape>), so they can't hijack the gesture. This is what lets a part
+      // be drawn inside a full-frame box (e.g. a Steering Head, Motor, or Chain
+      // over the Rickshaw Body) instead of grabbing and moving that outer box.
       const pos = stage?.getPointerPosition();
       if (!pos) return;
       setDraft({ x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y });
       return;
     }
 
-    // Not drawing: clicking empty area clears the selection. Clicks on a box
-    // (selected via its own handler) or a Transformer anchor are left alone so
-    // the drag/resize gesture can proceed.
+    // Not drawing: clicking empty area clears the selection. "Empty area" = the
+    // bare stage background or the source image. A box (name "box") or a
+    // Transformer resize handle is NOT empty area and is left alone, so
+    // deselecting mid-gesture can't unmount the Transformer and abort the very
+    // move/resize the user just started (the earlier "can't move/resize" bug).
+    const isEmptyArea = e.target === stage || e.target.name() === 'bg';
     if (isEmptyArea) props.onSelectBox(null);
   };
 
-  const onStageMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!draft) return;
-    const pos = e.target.getStage()?.getPointerPosition();
-    if (!pos) return;
-    setDraft((d) => (d ? { ...d, x1: pos.x, y1: pos.y } : d));
-  };
+  // Once a draw starts, the gesture runs on `window` — not just the Stage — so
+  // moving or releasing OUTSIDE the canvas still updates and finalizes the box.
+  // Otherwise a mouseup over a side panel never reaches the Stage and leaves a
+  // "stuck" rubber-band that the next click resumes. A ref holds the latest
+  // values so the window listeners never need to re-subscribe mid-drag.
+  const latest = React.useRef({
+    draft,
+    activeComponentKey,
+    toNormalized,
+    onDrawBox: props.onDrawBox,
+  });
+  React.useEffect(() => {
+    latest.current = { draft, activeComponentKey, toNormalized, onDrawBox: props.onDrawBox };
+  });
 
-  const onStageMouseUp = () => {
-    if (!draft || !activeComponentKey) {
+  const localPoint = React.useCallback((clientX: number, clientY: number) => {
+    const r = containerRef.current?.getBoundingClientRect();
+    return { x: clientX - (r?.left ?? 0), y: clientY - (r?.top ?? 0) };
+  }, []);
+
+  const isDrafting = draft !== null;
+  React.useEffect(() => {
+    if (!isDrafting) return;
+    const onMove = (ev: MouseEvent) => {
+      const p = localPoint(ev.clientX, ev.clientY);
+      setDraft((d) => (d ? { ...d, x1: p.x, y1: p.y } : d));
+    };
+    const onUp = (ev: MouseEvent) => {
+      const p = localPoint(ev.clientX, ev.clientY);
+      const { draft: d, activeComponentKey: key, toNormalized: toN, onDrawBox } = latest.current;
       setDraft(null);
-      return;
-    }
-    const a = toNormalized(draft.x0, draft.y0);
-    const b = toNormalized(draft.x1, draft.y1);
-    const normalized = normalizedBoxFromCorners(a.nx, a.ny, b.nx, b.ny);
-    setDraft(null);
-    if (normalized) props.onDrawBox(activeComponentKey, normalized);
-  };
+      if (!d || !key) return;
+      const a = toN(d.x0, d.y0);
+      const b = toN(p.x, p.y);
+      const normalized = normalizedBoxFromCorners(a.nx, a.ny, b.nx, b.ny);
+      if (normalized) onDrawBox(key, normalized);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isDrafting, localPoint]);
+
+  // Disarming (Esc, or toggling the Draw button off) also drops any in-progress
+  // rubber-band so a half-drawn box can't linger after the tool is put away.
+  React.useEffect(() => {
+    if (!activeComponentKey) setDraft(null);
+  }, [activeComponentKey]);
 
   const draftRect = draft
     ? {
@@ -181,13 +214,7 @@ export function AnnotationCanvas(props: AnnotationCanvasProps) {
       style={{ cursor: activeComponentKey ? 'crosshair' : 'default' }}
     >
       {size.width > 0 && size.height > 0 && (
-        <Stage
-          width={size.width}
-          height={size.height}
-          onMouseDown={onStageMouseDown}
-          onMouseMove={onStageMouseMove}
-          onMouseUp={onStageMouseUp}
-        >
+        <Stage width={size.width} height={size.height} onMouseDown={onStageMouseDown}>
           <Layer>
             {img && (
               <KonvaImage
@@ -207,6 +234,7 @@ export function AnnotationCanvas(props: AnnotationCanvasProps) {
                 box={b}
                 rect={toPixel(b.box)}
                 selected={b.id === selectedBoxId}
+                armed={armed}
                 onSelect={() => props.onSelectBox(b.id)}
                 onChange={(rect) => {
                   const a = toNormalized(rect.x, rect.y);
@@ -247,12 +275,16 @@ function BoxShape({
   box,
   rect,
   selected,
+  armed,
   onSelect,
   onChange,
 }: {
   box: CanvasBox;
   rect: PixelRect;
   selected: boolean;
+  /** True while a component is armed for drawing; freezes this box so a press
+   *  on it starts a new rubber-band instead of selecting/dragging it. */
+  armed: boolean;
   onSelect: () => void;
   onChange: (rect: PixelRect) => void;
 }) {
@@ -282,7 +314,8 @@ function BoxShape({
         shadowBlur={selected ? 8 : 0}
         shadowOpacity={selected ? 0.6 : 0}
         cornerRadius={2}
-        draggable
+        listening={!armed}
+        draggable={!armed}
         onClick={onSelect}
         onTap={onSelect}
         onDragEnd={(e) => onChange({ ...rect, x: e.target.x(), y: e.target.y() })}
@@ -313,7 +346,9 @@ function BoxShape({
           borderStroke={box.border}
           anchorStroke={box.border}
           anchorSize={7}
-          boundBoxFunc={(oldBox, newBox) => (newBox.width < 6 || newBox.height < 6 ? oldBox : newBox)}
+          boundBoxFunc={(oldBox, newBox) =>
+            newBox.width < 6 || newBox.height < 6 ? oldBox : newBox
+          }
         />
       )}
     </>

@@ -16,6 +16,36 @@ export function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
 }
 
+/** Contain-fit transform of an image inside a viewport (scale + centering offset). */
+export interface ContainFit {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+/**
+ * Fit a natural-size image into a stage while preserving aspect ratio, centered
+ * (letterboxed). Returns the uniform scale and the top-left offset of the drawn
+ * image within the stage. This is the single source of truth for the canvas
+ * pixel↔normalized mapping, so it lives in core (not the React component) and is
+ * unit-tested. Non-positive natural dimensions yield an identity transform so
+ * callers never divide by zero.
+ */
+export function computeContainFit(
+  stageW: number,
+  stageH: number,
+  natW: number,
+  natH: number,
+): ContainFit {
+  if (natW <= 0 || natH <= 0) return { scale: 1, offsetX: 0, offsetY: 0 };
+  const scale = Math.min(stageW / natW, stageH / natH);
+  return {
+    scale,
+    offsetX: (stageW - natW * scale) / 2,
+    offsetY: (stageH - natH * scale) / 2,
+  };
+}
+
 /**
  * Build a normalized box from two arbitrary corner points (in 0..1 space),
  * ordering the coordinates so the invariant holds. Returns null if the box is
