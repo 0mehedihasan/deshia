@@ -130,6 +130,130 @@ Every submitted image produces **all three** annotation formats at once — ther
 
 A single dataset-level `ANNOTATED/classes.txt` lists the class ids, derived from a deterministic whole-schema label map so ids stay consistent across every folder. See [`docs/export-format.md`](docs/export-format.md).
 
+### Example: one image, three label files
+
+One submitted image produces all three formats at once. Below is a real image from the sample Rickshaw set — a **Back** view labeled with two components, `rickshaw_body` and `rear_drive_assembly` (the round rear part, which DeshiA deliberately does _not_ call a "motor"):
+
+```
+Class       Rickshaw
+View        Back
+Image       2296 × 4080 px  ·  datasetIndex 024
+Components  rickshaw_body        · VISIBLE
+            rear_drive_assembly  · VISIBLE
+```
+
+On submit it lands on disk like this — the dataset image stays clean, boxes are drawn into `VISUALIZATIONS/` only:
+
+```
+ANNOTATED/
+├─ classes.txt                                    shared, dataset-level
+└─ rickshaw/back/
+   ├─ images/annotated_rickshaw_back_024.jpg      clean copy — no boxes drawn
+   └─ annotations/
+      ├─ annotated_rickshaw_back_024.txt          YOLO
+      ├─ annotated_rickshaw_back_024.xml          Pascal VOC
+      └─ annotated_rickshaw_back_024.json         COCO
+```
+
+**YOLO** — one line per box, `<class_id> <x_center> <y_center> <width> <height>`, all normalized `0..1`:
+
+```
+4 0.487246 0.588517 0.535652 0.073365
+0 0.490081 0.410686 0.693808 0.645952
+```
+
+Each leading id indexes the shared `ANNOTATED/classes.txt` — line `N` (0-based) is class id `N`, so `4` → `rear_drive_assembly` and `0` → `rickshaw_body`:
+
+```
+rickshaw_body
+steering_head
+pedal_crank_assembly
+chain
+rear_drive_assembly
+e_rickshaw_body
+electric_control_circuit
+electric_drive_area
+pedal
+electric_motor
+```
+
+**Pascal VOC** — `annotated_rickshaw_back_024.xml`, each box as integer pixels (`difficult=1` marks an occluded box):
+
+```xml
+<annotation>
+  <folder>images</folder>
+  <filename>annotated_rickshaw_back_024.jpg</filename>
+  <path>…/ANNOTATED/rickshaw/back/images/annotated_rickshaw_back_024.jpg</path>
+  <source>
+    <database>DeshiA</database>
+  </source>
+  <size>
+    <width>2296</width>
+    <height>4080</height>
+    <depth>3</depth>
+  </size>
+  <segmented>0</segmented>
+  <object>
+    <name>rear_drive_assembly</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>505</xmin>
+      <ymin>2252</ymin>
+      <xmax>1734</xmax>
+      <ymax>2551</ymax>
+    </bndbox>
+  </object>
+  <object>
+    <name>rickshaw_body</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>330</xmin>
+      <ymin>359</ymin>
+      <xmax>1922</xmax>
+      <ymax>2993</ymax>
+    </bndbox>
+  </object>
+</annotation>
+```
+
+**COCO** — `annotated_rickshaw_back_024.json`, a self-contained per-image document; `bbox` is `[x, y, width, height]` in pixels and `category_id` is 1-based (the `categories` array carries all ten classes from `classes.txt` — only the first is shown here for brevity):
+
+```json
+{
+  "info": { "description": "DeshiA annotation export", "version": "1.0", "generator": "DeshiA" },
+  "images": [
+    { "id": 24, "file_name": "annotated_rickshaw_back_024.jpg", "width": 2296, "height": 4080 }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 24,
+      "category_id": 5,
+      "bbox": [503.79, 2251.48, 1229.86, 299.33],
+      "area": 368133.11,
+      "iscrowd": 0,
+      "segmentation": []
+    },
+    {
+      "id": 2,
+      "image_id": 24,
+      "category_id": 1,
+      "bbox": [328.73, 357.86, 1592.98, 2635.49],
+      "area": 4198283.2,
+      "iscrowd": 0,
+      "segmentation": []
+    }
+  ],
+  "categories": [{ "id": 1, "name": "rickshaw_body", "supercategory": "component" }]
+}
+```
+
+All three files describe the **same two boxes** — VOC in integer pixels, COCO in pixel `[x, y, w, h]`, YOLO in normalized center form — so the workspace is ready for any trainer with no re-export.
+
 ### Face redaction (privacy)
 
 To publish datasets that contain people, DeshiA can **mosaic (pixelate) human faces** with a resizable circular tool.
