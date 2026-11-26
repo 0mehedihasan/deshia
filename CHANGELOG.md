@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Initialized per-label visibility/lock state before the canvas derives its
+  objects, removing a runtime error when switching to the Objects editor.
+
 ### Added — full CVAT-style toolset (single-user, DeshiA branding)
 
 - **Objects editor** alongside the original component workflow: many independent

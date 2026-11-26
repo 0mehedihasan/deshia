@@ -60,6 +60,24 @@ See the [feature parity notes](docs/rooyacvat-parity.md) for the worked port,
 [complete build guide](docs/BUILD-ANNOTATION-TOOL.md) if you want to build your
 own annotation tool with these patterns.
 
+## Screenshots
+
+Real UI captures from a local run (dark theme, 1440×900):
+
+| Workspace dashboard                                                                            | Component-box annotator                                                                        |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [![Workspace dashboard](docs/screenshots/03-dashboard.png)](docs/screenshots/03-dashboard.png) | [![Component annotator](docs/screenshots/05-annotated.png)](docs/screenshots/05-annotated.png) |
+
+| Generalized Objects editor                                                            | Schema editor                                                                      |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [![Objects editor](docs/screenshots/06-objects.png)](docs/screenshots/06-objects.png) | [![Schema editor](docs/screenshots/07-schema.png)](docs/screenshots/07-schema.png) |
+
+More captures: [welcome](docs/screenshots/01-welcome.png) ·
+[empty workspace](docs/screenshots/02-workspace.png) ·
+[component tools](docs/screenshots/04-components.png) ·
+[statistics](docs/screenshots/08-statistics.png) ·
+[manual](docs/screenshots/09-manual.png)
+
 ## Contents
 
 - [Key features](#key-features) · [Annotation model](#annotation-model) · [Why Rickshaw is bundled](#why-a-rickshaw-schema-is-bundled-and-why-you-can-ignore-it)

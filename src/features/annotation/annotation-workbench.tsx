@@ -222,6 +222,8 @@ export function AnnotationWorkbench({
   const [blurArmed, setBlurArmed] = React.useState(false);
   /** Component-box mode preserves the Rickshaw workflow; Objects mode is the
    *  generalized, many-objects-per-image CVAT-style editor. */
+  const [hiddenLabels, setHiddenLabels] = React.useState<Set<string>>(new Set());
+  const [lockedLabels, setLockedLabels] = React.useState<Set<string>>(new Set());
   const [serverRevision, setServerRevision] = React.useState(0);
   const [mode, setMode] = React.useState<'components' | 'objects'>('components');
   const [objectTool, setObjectTool] = React.useState<ObjectTool>('select');
@@ -554,8 +556,6 @@ export function AnnotationWorkbench({
   const objectCanvasRef = React.useRef<ObjectCanvasHandle>(null);
   const [adjustments, setAdjustments] = React.useState({ brightness: 0, contrast: 0, gamma: 0 });
   const [adjustOpen, setAdjustOpen] = React.useState(false);
-  const [hiddenLabels, setHiddenLabels] = React.useState<Set<string>>(new Set());
-  const [lockedLabels, setLockedLabels] = React.useState<Set<string>>(new Set());
   const [recovery, setRecovery] = React.useState<{
     draft: AnnotationDraft;
     savedAt: number;
