@@ -42,14 +42,39 @@ function createConnection(): { db: DrizzleDb; sqlite: Database.Database } {
   return { db, sqlite };
 }
 
-if (!globalThis.__deshiaDb) {
-  const { db, sqlite } = createConnection();
-  globalThis.__deshiaDb = db;
-  globalThis.__deshiaSqlite = sqlite;
+function connection(): { db: DrizzleDb; sqlite: Database.Database } {
+  if (!globalThis.__deshiaDb || !globalThis.__deshiaSqlite) {
+    const created = createConnection();
+    globalThis.__deshiaDb = created.db;
+    globalThis.__deshiaSqlite = created.sqlite;
+  }
+  return { db: globalThis.__deshiaDb, sqlite: globalThis.__deshiaSqlite };
 }
 
-export const db: DrizzleDb = globalThis.__deshiaDb;
-export const sqlite: Database.Database = globalThis.__deshiaSqlite!;
+/**
+ * Lazy proxies: importing this module never opens SQLite or loads the native
+ * binding. Next.js build workers import route modules during page-data
+ * collection; touching native code there caused SIGSEGV on Linux CI. The real
+ * connection is created on the first query at runtime.
+ */
+function lazy<T extends object>(get: () => T): T {
+  return new Proxy({} as T, {
+    get(_target, property) {
+      const value: unknown = Reflect.get(get() as object, property);
+      return typeof value === 'function' ? value.bind(get()) : value;
+    },
+    set(_target, property, value) {
+      Reflect.set(get() as object, property, value);
+      return true;
+    },
+    has(_target, property) {
+      return Reflect.has(get() as object, property);
+    },
+  });
+}
+
+export const db: DrizzleDb = lazy<DrizzleDb>(() => connection().db);
+export const sqlite: Database.Database = lazy<Database.Database>(() => connection().sqlite);
 export { schema };
 export { DB_PATH };
 
