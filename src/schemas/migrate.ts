@@ -1,3 +1,4 @@
+import { GEOMETRY_KINDS } from '@/core/geometry/types';
 import type { AnnotationSchema } from './types';
 import {
   SCHEMA_FORMAT_VERSION,
@@ -41,7 +42,9 @@ export function migrateFlatToRecursive(flat: AnnotationSchema): RecursiveSchema 
           id: viewId(flat.id, cls.key, view.key),
           legacyKey: view.key,
           children: view.components.map((comp) =>
-            createLabel(comp.label, ['box'], {
+            // The component workflow uses boxes; in the generalized Objects
+            // editor the same label can be drawn with any supported geometry.
+            createLabel(comp.label, [...GEOMETRY_KINDS], {
               id: compId(flat.id, cls.key, view.key, comp.key),
               legacyKey: comp.key,
               description: comp.hint,

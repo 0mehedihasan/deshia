@@ -134,17 +134,35 @@ const OBJECT_TOOLS: Array<{
   key: ObjectTool;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
+  short: string;
 }> = [
-  { key: 'select', icon: MousePointer2, label: 'Select' },
-  { key: 'box', icon: Square, label: 'Rectangle' },
-  { key: 'rotated_box', icon: Box, label: 'Rotated box' },
-  { key: 'ellipse', icon: Circle, label: 'Ellipse' },
-  { key: 'polygon', icon: Hexagon, label: 'Polygon' },
-  { key: 'polyline', icon: Minus, label: 'Polyline' },
-  { key: 'point', icon: CircleDot, label: 'Point' },
-  { key: 'points', icon: Layers, label: 'Points' },
-  { key: 'cuboid', icon: Box, label: 'Cuboid' },
+  { key: 'select', icon: MousePointer2, label: 'Select', short: 'Select' },
+  { key: 'box', icon: Square, label: 'Rectangle', short: 'Rect' },
+  { key: 'rotated_box', icon: Box, label: 'Rotated box', short: 'Rot' },
+  { key: 'ellipse', icon: Circle, label: 'Ellipse', short: 'Ellipse' },
+  { key: 'polygon', icon: Hexagon, label: 'Polygon', short: 'Poly' },
+  { key: 'polyline', icon: Minus, label: 'Polyline', short: 'Line' },
+  { key: 'point', icon: CircleDot, label: 'Point', short: 'Point' },
+  { key: 'points', icon: Layers, label: 'Points', short: 'Pts' },
+  { key: 'cuboid', icon: Box, label: 'Cuboid', short: 'Cube' },
 ];
+
+const GEOMETRY_SHORT: Record<string, string> = {
+  box: 'rect',
+  rotated_box: 'rot',
+  polygon: 'poly',
+  polyline: 'line',
+  point: 'point',
+  points: 'pts',
+  ellipse: 'ellipse',
+  cuboid: 'cube',
+};
+
+function shortGeometryTypes(kinds: readonly string[] | undefined): string {
+  if (!kinds || kinds.length === 0) return 'any';
+  const shown = kinds.slice(0, 3).map((kind) => GEOMETRY_SHORT[kind] ?? kind);
+  return kinds.length > 3 ? `${shown.join('/')}+${kinds.length - 3}` : shown.join('/');
+}
 
 /**
  * Turn a thrown action error into an annotator-facing message. A dead local
@@ -995,7 +1013,7 @@ export function AnnotationWorkbench({
                               </Badge>
                             )}
                             <span className="font-mono text-meta text-muted">
-                              {label.geometryTypes?.join('/') ?? 'any'}
+                              {shortGeometryTypes(label.geometryTypes)}
                             </span>
                           </span>
                         </button>
@@ -1043,9 +1061,16 @@ export function AnnotationWorkbench({
                 </ul>
               </div>
               <div className="rounded-lg border border-border bg-elevated p-2.5 text-meta text-muted">
-                Select a tool in the canvas rail, then drag or click to place an object. Paths
-                finish with a double-click or the Finish button. Drag vertices to refine. All
-                objects are saved with the draft.
+                Tools in the canvas rail: <span className="font-mono text-text">1</span> Select ·{' '}
+                <span className="font-mono text-text">2</span> Rect ·{' '}
+                <span className="font-mono text-text">3</span> Rotated ·{' '}
+                <span className="font-mono text-text">4</span> Ellipse ·{' '}
+                <span className="font-mono text-text">5</span> Polygon ·{' '}
+                <span className="font-mono text-text">6</span> Polyline ·{' '}
+                <span className="font-mono text-text">7</span> Point ·{' '}
+                <span className="font-mono text-text">8</span> Points ·{' '}
+                <span className="font-mono text-text">9</span> Cuboid. Drag for area shapes; click
+                to place path vertices, then double-click or press Finish. Drag vertices to refine.
               </div>
             </div>
           </div>
@@ -1365,20 +1390,21 @@ export function AnnotationWorkbench({
                 onImageError={handleFrameError}
               />
               <div className="bg-elevated/95 absolute left-2 top-2 flex flex-col gap-1 rounded-md border border-border-strong p-1 shadow">
-                {OBJECT_TOOLS.map(({ key, icon: Icon, label }, i) => (
+                {OBJECT_TOOLS.map(({ key, icon: Icon, label, short }, i) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => chooseTool(key)}
-                    title={`${label} (${i + 1})`}
+                    title={`${label} — press ${i + 1}`}
                     aria-label={label}
-                    className={`grid h-8 w-8 place-items-center rounded transition-colors ${
+                    className={`flex w-14 flex-col items-center gap-0.5 rounded px-1 py-1.5 transition-colors ${
                       objectTool === key
                         ? 'bg-primary/20 text-primary'
                         : 'text-muted hover:bg-elevated hover:text-text'
                     }`}
                   >
                     <Icon className="h-4 w-4" />
+                    <span className="font-mono text-[9px] leading-none">{short}</span>
                   </button>
                 ))}
               </div>

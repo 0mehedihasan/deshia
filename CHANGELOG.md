@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initialized per-label visibility/lock state before the canvas derives its
   objects, removing a runtime error when switching to the Objects editor.
+- Path drawing no longer loses vertices when successive clicks trigger the
+  browser's dblclick event; double-click-to-finish now requires the same spot.
+- Migrated built-in labels allow every geometry kind in the Objects editor, and
+  the tool rail shows readable shape names instead of icon-only buttons.
 
 ### Added — full CVAT-style toolset (single-user, DeshiA branding)
 

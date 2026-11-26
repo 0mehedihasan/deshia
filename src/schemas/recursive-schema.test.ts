@@ -26,7 +26,9 @@ describe('flat -> recursive migration (safe, reference-preserving)', () => {
     const chain = findLabelByLegacyKey(rec.roots, 'chain');
     expect(chain?.name).toBe('Chain');
     expect(chain?.kind).toBe('label');
-    expect(chain?.geometryTypes).toEqual(['box']);
+    expect(chain?.geometryTypes).toContain('box');
+    expect(chain?.geometryTypes).toContain('polygon');
+    expect(chain?.geometryTypes).toContain('cuboid');
   });
 
   it('uses deterministic ids (idempotent) and renaming never changes an id', () => {

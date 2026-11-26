@@ -279,6 +279,7 @@ export const ObjectCanvas = React.forwardRef<ObjectCanvasHandle, ObjectCanvasPro
 
     // ---- click-to-add paths (polygon / polyline / points) --------------------
     const [path, setPath] = React.useState<NormPoint[]>([]);
+    const lastPathClick = React.useRef<{ x: number; y: number; at: number } | null>(null);
     const pathTool = tool === 'polygon' || tool === 'polyline' || tool === 'points';
 
     const finishPath = React.useCallback(() => {
@@ -475,6 +476,22 @@ export const ObjectCanvas = React.forwardRef<ObjectCanvasHandle, ObjectCanvasPro
         if (!activeLabelId) return;
         const pos = stage.getPointerPosition();
         if (!pos) return;
+        // Double-click on the SAME spot finishes a path. Plain successive
+        // clicks elsewhere add vertices (a browser dblclick fires even when the
+        // pointer moved, so relying on the Stage dblclick event loses the path).
+        const now = Date.now();
+        const previous = lastPathClick.current;
+        if (
+          previous &&
+          now - previous.at < 400 &&
+          Math.hypot(pos.x - previous.x, pos.y - previous.y) < 8 &&
+          path.length >= (tool === 'polygon' ? 3 : 2)
+        ) {
+          lastPathClick.current = null;
+          finishPath();
+          return;
+        }
+        lastPathClick.current = { x: pos.x, y: pos.y, at: now };
         const candidateStagePoints = snapCandidates.map(toStage);
         let p = toNorm(pos);
         const nearest = candidateStagePoints.reduce<{ index: number; dist: number }>(
@@ -504,10 +521,6 @@ export const ObjectCanvas = React.forwardRef<ObjectCanvasHandle, ObjectCanvasPro
         if (pos && props.onSelectObjects) setSelectDraft({ a: pos, b: pos });
         props.onSelect(null);
       }
-    };
-
-    const onStageDblClick = () => {
-      if (pathTool) latestPath.current.finishPath();
     };
 
     // Esc cancels an in-progress path or rubber-band.
@@ -550,7 +563,6 @@ export const ObjectCanvas = React.forwardRef<ObjectCanvasHandle, ObjectCanvasPro
             width={size.width}
             height={size.height}
             onMouseDown={onStageDown}
-            onDblClick={onStageDblClick}
             onMouseMove={(e) => setCursor(e.target.getStage()?.getPointerPosition() ?? null)}
             onMouseLeave={() => setCursor(null)}
             onWheel={(e) => {
