@@ -56,7 +56,7 @@
     "sharp": "0.33.5",
     "konva": "9.3.16",
     "react-konva": "18.2.10",
-    "zod": "3.23.8",
+    "zod": "4.6.7",
     "lucide-react": "0.454.0",
     "geist": "1.3.1",
     "class-variance-authority": "0.7.0",
