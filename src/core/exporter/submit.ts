@@ -1,12 +1,12 @@
-import { stat, writeFile } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
 import { colorsForView, getComponent } from '@/core/annotation/engine';
-import { colorForIndex } from '@/core/annotation/palette';
+import { assignPaletteColors, colorForIndex } from '@/core/annotation/palette';
 import { validateAnnotation } from '@/core/annotation/validate';
 import { annotatedRoot, assertInside, outputRoot } from '@/core/filesystem/paths';
 import type { AnnotationSchema } from '@/schemas/types';
-import type { AnnotationState, ImageStatus } from '@/types/domain';
+import type { AnnotationState, ImageStatus, NormalizedBox, RedactionCircle } from '@/types/domain';
 import {
   annotatedImageName,
   annotationCocoName,
@@ -24,6 +24,20 @@ import { buildRedactionComposites, type RedactionComposite } from './redaction-r
 import { renderVisualization, type VizObject } from './visualization';
 import { generateVocXml, type VocObjectInput } from './voc';
 import { generateYoloTxt } from './yolo';
+import { createStoredZip } from './zip';
+import { rebuildAggregateCoco } from './coco-aggregate';
+import { getExportableAnnotations } from './annotation-selection';
+import {
+  buildObjectLabelMap,
+  exportableObjects,
+  objectNormalizedBox,
+  generateCvatXmlForObjects,
+  nativeObjectProject,
+  objectsToBoxes,
+} from './object-formats';
+import { validateObjects } from '@/core/annotation/objects';
+import { schemaLabels } from '@/schemas/traverse';
+import type { RecursiveSchema } from '@/schemas/nodes';
 
 /**
  * Submission transaction orchestrator (see .claude/CLAUDE.md §11).
@@ -62,6 +76,14 @@ export interface ExportOutputs {
   annotationCocoPath: string;
   annotationYoloPath: string;
   yoloClassesPath: string;
+  /** Dataset-level merged COCO document. */
+  aggregateCocoPath: string;
+  /** CVAT XML for generalized objects (only present in Objects mode). */
+  cvatXmlPath?: string;
+  /** Native lossless project entry (only present in Objects mode). */
+  nativeProjectPath?: string;
+  /** CVAT 1.1 ZIP archive (only present in Objects mode). */
+  cvatZipPath?: string;
   /** Box-rendered preview under VISUALIZATIONS/ (the only image with boxes). */
   visualizationImagePath: string;
   relativePaths: string[];
@@ -119,42 +141,91 @@ export async function exportImage(params: {
   outputDir: string;
   image: ImageFileInfo;
   state: AnnotationState;
+  /** User-authored schema definition used for object label ids and validation. */
+  recursiveSchema?: RecursiveSchema | null;
 }): Promise<ExportResult> {
   const { schema, outputDir, image, state } = params;
+  const objectsMode = state.objects.length > 0;
 
-  // 1. Validate.
-  const validation = validateAnnotation(schema, state);
-  if (!validation.ok) {
-    return { ok: false, errors: validation.errors.map((e) => e.message) };
+  // 1. Validate. Objects mode validates the generalized model against the
+  // published label definitions; component mode keeps the Rickshaw checks.
+  if (objectsMode) {
+    const labels = params.recursiveSchema ? schemaLabels(params.recursiveSchema) : [];
+    const issues = validateObjects(state.objects, new Map(labels.map((l) => [l.id, l])));
+    if (issues.length > 0) {
+      return { ok: false, errors: issues.map((i) => `${i.objectId ?? 'object'}: ${i.message}`) };
+    }
+  } else {
+    const validation = validateAnnotation(schema, state);
+    if (!validation.ok) {
+      return { ok: false, errors: validation.errors.map((e) => e.message) };
+    }
   }
-  const classKey = state.classKey!;
-  const viewKey = state.viewKey!;
+  const classKey = objectsMode ? 'objects' : state.classKey!;
+  const viewKey = objectsMode ? 'all' : state.viewKey!;
 
   try {
-    // 3. Generate annotation files. Every format exports the same objects: all
-    //    boxes whose component is not explicitly NOT_VISIBLE. Object class names
-    //    are the schema component keys (identical across VOC/COCO/YOLO); the id
+    // 3. Generate annotation files. Every format uses the shared selection
+    //    policy: boxes marked NOT_VISIBLE remain in storage but are excluded.
+    //    Object class names are the schema component keys (identical across
+    //    VOC/COCO/YOLO); the id
     //    space comes from a deterministic, whole-schema label map so YOLO/COCO
     //    ids are stable and consistent across every (class, view) folder.
-    const exported = state.boxes.filter((b) => b.visibility !== 'NOT_VISIBLE');
-    const labelMap = buildLabelMap(schema);
-
-    const vocObjects: VocObjectInput[] = exported.map((b) => ({
+    const exported = getExportableAnnotations(state.boxes).exportable;
+    let labelMap = buildLabelMap(schema);
+    let vocObjects: VocObjectInput[] = exported.map((b) => ({
       name: b.componentKey,
       box: b.box,
       difficult: b.visibility === 'OCCLUDED',
     }));
-
-    // Visualization objects reuse the workbench's deterministic per-component
-    // colors (same map the canvas uses) and the schema's human label, so the
-    // preview matches exactly what the annotator saw. Colors are keyed by
-    // component, not render order, so they never shift between boxes.
-    const vizColors = colorsForView(schema, classKey, viewKey);
-    const vizObjects: VizObject[] = exported.map((b) => ({
+    let cocoObjects: Array<{ name: string; box: NormalizedBox }> = exported.map((b) => ({
+      name: b.componentKey,
       box: b.box,
-      color: vizColors.get(b.componentKey) ?? colorForIndex(0),
+    }));
+    let yoloObjects: Array<{ name: string; box: NormalizedBox }> = cocoObjects;
+    let vizObjects: VizObject[] = exported.map((b) => ({
+      box: b.box,
+      color: colorsForView(schema, classKey, viewKey).get(b.componentKey) ?? colorForIndex(0),
       label: getComponent(schema, classKey, viewKey, b.componentKey)?.label ?? b.componentKey,
     }));
+    let cvatXml: string | null = null;
+    let nativeProject: string | null = null;
+
+    if (objectsMode) {
+      const labels = params.recursiveSchema ? schemaLabels(params.recursiveSchema) : [];
+      labelMap = buildObjectLabelMap(params.recursiveSchema ?? null);
+      const converted = objectsToBoxes(state.objects, {
+        width: image.width,
+        height: image.height,
+      });
+      vocObjects = converted.objects.map((o) => ({
+        name: o.name,
+        box: o.box,
+        difficult: o.occluded,
+      }));
+      cocoObjects = converted.objects.map((o) => ({ name: o.name, box: o.box }));
+      yoloObjects = cocoObjects;
+      const colors = assignPaletteColors(labels.map((l) => l.id));
+      const names = new Map(state.objects.map((o) => [o.id, o.labelName]));
+      vizObjects = converted.objects.map((o) => ({
+        box: o.box,
+        color: colors.get(o.labelId) ?? colorForIndex(0),
+        label: names.get(o.id) ?? o.name,
+      }));
+      cvatXml = generateCvatXmlForObjects({
+        fileName: annotatedImageName(classKey, viewKey, image.datasetIndex, image.extension),
+        size: { width: image.width, height: image.height },
+        objects: state.objects,
+        schema: params.recursiveSchema ?? null,
+      });
+      nativeProject = nativeObjectProject({
+        schema: params.recursiveSchema ?? null,
+        objects: state.objects,
+        mediaId: image.id,
+        width: image.width,
+        height: image.height,
+      });
+    }
 
     const dirs = await ensureExportTarget(outputDir, classKey, viewKey);
     const root = outputRoot(outputDir);
@@ -175,6 +246,18 @@ export async function exportImage(params: {
     // The YOLO class list is a single dataset-level file (consistent ids across
     // all folders), so it lives at the ANNOTATED root, not under a leaf.
     const yoloClassesPath = path.join(annotatedRoot(outputDir), YOLO_CLASSES_FILENAME);
+    const cvatXmlPath = path.join(
+      dirs.annotatedAnnotations,
+      `objects_${String(image.datasetIndex).padStart(3, '0')}.xml`,
+    );
+    const nativeProjectPath = path.join(
+      dirs.annotatedAnnotations,
+      `objects_${String(image.datasetIndex).padStart(3, '0')}.json`,
+    );
+    const cvatZipPath = path.join(
+      dirs.annotatedAnnotations,
+      `objects_${String(image.datasetIndex).padStart(3, '0')}_cvat.zip`,
+    );
 
     // Confine every write to the output root.
     for (const p of [
@@ -184,6 +267,9 @@ export async function exportImage(params: {
       annotationCocoPath,
       annotationYoloPath,
       yoloClassesPath,
+      cvatXmlPath,
+      nativeProjectPath,
+      cvatZipPath,
       visualizationImagePath,
     ]) {
       assertInside(root, p);
@@ -200,23 +286,45 @@ export async function exportImage(params: {
       imageId: image.datasetIndex,
       fileName: annImageName,
       size: { width: image.width, height: image.height },
-      objects: exported.map((b) => ({ name: b.componentKey, box: b.box })),
+      objects: cocoObjects,
       labelMap,
     });
-    const yoloTxt = generateYoloTxt(
-      exported.map((b) => ({ name: b.componentKey, box: b.box })),
-      labelMap,
-    );
+    const yoloTxt = generateYoloTxt(yoloObjects, labelMap);
     const classesTxt = yoloClassesText(labelMap);
 
     // Face/privacy blur patches, computed once from the source and baked into
     // every published copy (RAW + ANNOTATED + VISUALIZATIONS). Empty when the
     // annotator marked no faces, so the no-redaction path is unchanged. The
     // source image itself is never modified (golden rule #4).
+    const labelRedactions: RedactionCircle[] =
+      objectsMode && params.recursiveSchema
+        ? (() => {
+            const labels = schemaLabels(params.recursiveSchema!);
+            const redactIds = new Set(labels.filter((l) => l.redactOnExport).map((l) => l.id));
+            if (redactIds.size === 0) return [];
+            const shortest = Math.min(image.width, image.height);
+            return exportableObjects(state.objects)
+              .filter((o) => redactIds.has(o.labelId))
+              .flatMap((o, i) => {
+                const b = objectNormalizedBox(o, { width: image.width, height: image.height });
+                const cx = (b.xMin + b.xMax) / 2;
+                const cy = (b.yMin + b.yMax) / 2;
+                const radiusPx = Math.max(1, shortest * 0.025);
+                return [
+                  {
+                    id: `label_redaction_${o.id}_${i}`,
+                    cx,
+                    cy,
+                    r: image.width > 0 ? radiusPx / image.width : 0,
+                  },
+                ];
+              });
+          })()
+        : [];
     const redactionComposites = await buildRedactionComposites(
       image.originalPath,
       { width: image.width, height: image.height },
-      state.redactions ?? [],
+      [...(state.redactions ?? []), ...labelRedactions],
     );
 
     // 4. Copy RAW image (no boxes; faces blurred if any).
@@ -232,6 +340,18 @@ export async function exportImage(params: {
     await writeFile(annotationCocoPath, cocoJson, 'utf8');
     await writeFile(annotationYoloPath, yoloTxt, 'utf8');
     await writeFile(yoloClassesPath, classesTxt, 'utf8');
+    if (cvatXml !== null) await writeFile(cvatXmlPath, cvatXml, 'utf8');
+    if (nativeProject !== null) await writeFile(nativeProjectPath, nativeProject, 'utf8');
+    if (cvatXml !== null) {
+      const archive = createStoredZip([
+        { name: 'annotations.xml', data: Buffer.from(cvatXml, 'utf8') },
+        {
+          name: `images/${path.basename(annotatedImagePath)}`,
+          data: await readFile(image.originalPath),
+        },
+      ]);
+      await writeFile(cvatZipPath, archive);
+    }
     // 5b. Render the box-annotated visualization. This is the ONLY output with
     //     boxes drawn (CLAUDE.md §10); RAW and ANNOTATED stay clean. Source is
     //     read via Sharp and never mutated. The preview is a human convenience,
@@ -265,6 +385,14 @@ export async function exportImage(params: {
     await verifyWritten(annotationCocoPath);
     await verifyWritten(annotationYoloPath, exported.length === 0);
     await verifyWritten(yoloClassesPath);
+    if (cvatXml !== null) await verifyWritten(cvatXmlPath);
+    if (nativeProject !== null) await verifyWritten(nativeProjectPath);
+    if (cvatXml !== null) await verifyWritten(cvatZipPath);
+
+    // Dataset-level COCO: merge every per-image document written so far.
+    await rebuildAggregateCoco(outputDir);
+    const aggregateCocoPath = path.join(annotatedRoot(outputDir), 'annotations.coco.json');
+    await verifyWritten(aggregateCocoPath);
 
     const rel = (p: string) => path.relative(outputDir, p);
     const relativePaths = [
@@ -274,6 +402,10 @@ export async function exportImage(params: {
       rel(annotationCocoPath),
       rel(annotationYoloPath),
       rel(yoloClassesPath),
+      rel(aggregateCocoPath),
+      ...(cvatXml !== null ? [rel(cvatXmlPath)] : []),
+      ...(nativeProject !== null ? [rel(nativeProjectPath)] : []),
+      ...(cvatXml !== null ? [rel(cvatZipPath)] : []),
     ];
     // Only advertise the preview if it actually rendered + verified above.
     if (visualizationRendered) relativePaths.push(rel(visualizationImagePath));
@@ -288,6 +420,10 @@ export async function exportImage(params: {
         annotationCocoPath,
         annotationYoloPath,
         yoloClassesPath,
+        aggregateCocoPath,
+        cvatXmlPath: cvatXml !== null ? cvatXmlPath : undefined,
+        nativeProjectPath: nativeProject !== null ? nativeProjectPath : undefined,
+        cvatZipPath: cvatXml !== null ? cvatZipPath : undefined,
         visualizationImagePath,
         relativePaths,
       },

@@ -36,7 +36,7 @@ export interface DraftInput {
   classKey: string | null;
   viewKey: string | null;
   componentVisibility: Record<string, Visibility>;
-  boxes: Array<Pick<AnnotationBox, 'componentKey' | 'box' | 'visibility'>>;
+  boxes: Array<Pick<AnnotationBox, 'componentKey' | 'box' | 'visibility' | 'vehicleInstanceId'>>;
   /** Circular face/privacy regions to blur into exported copies. */
   redactions: RedactionCircle[];
 }
@@ -85,14 +85,17 @@ function rowToState(annotation: AnnotationRow, boxes: BoundingBoxRow[]): Annotat
     classKey: annotation.classKey,
     viewKey: annotation.viewKey,
     componentVisibility: parseVisibility(annotation.componentVisibility),
+    objects: [],
     redactions: parseRedactions(annotation.redactions),
     status: annotation.status as AnnotationStatus,
     annotationVersion: annotation.annotationVersion,
+    saveRevision: annotation.saveRevision,
     createdAt: annotation.createdAt,
     updatedAt: annotation.updatedAt,
     boxes: boxes.map((b) => ({
       id: b.id,
       componentKey: b.componentKey,
+      vehicleInstanceId: b.vehicleInstanceId ?? null,
       visibility: b.visibility as Visibility,
       box: { xMin: b.xMin, yMin: b.yMin, xMax: b.xMax, yMax: b.yMax },
       createdAt: b.createdAt,
@@ -137,6 +140,7 @@ export function saveDraft(input: DraftInput): AnnotationState {
           componentVisibility: JSON.stringify(input.componentVisibility),
           redactions: JSON.stringify(input.redactions),
           status: 'DRAFT',
+          saveRevision: existing.saveRevision + 1,
           updatedAt: ts,
         })
         .where(eq(annotations.id, annotationId))
@@ -169,6 +173,7 @@ export function saveDraft(input: DraftInput): AnnotationState {
           id: newId('box'),
           annotationId,
           componentKey: b.componentKey,
+          vehicleInstanceId: b.vehicleInstanceId ?? null,
           xMin: b.box.xMin,
           yMin: b.box.yMin,
           xMax: b.box.xMax,

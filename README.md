@@ -32,12 +32,41 @@ An open-source, offline **desktop image-annotation workstation** for building st
 
 > **Status** — `v0.1.0`, active development. First target dataset: a Bangladeshi **Rickshaw / E-Rickshaw** set (~500 images). The Rickshaw ontology is the _first_ dataset, **not** a built-in limitation — the annotation engine is schema-driven.
 
+### Full CVAT-style toolset (included)
+
+Alongside the original Rickshaw component workflow, DeshiA now includes an
+**Objects** editor for any dataset:
+
+- 8 shape types — rectangle (2-point or 4-point), rotated box, ellipse, polygon,
+  polyline, point, points group and 2D cuboid — with attributes, occlusion,
+  z-order, visibility, lock and deterministic colors.
+- CVAT-style editing: vertex insert/delete, snapping, freehand, crosshair, live
+  dimensions, marquee multi-select, clipboard, zoom/pan/fit, four stacking
+  operations and undo/redo.
+- A local **schema editor** with immutable published versions and JSON
+  import/export — annotations always reference stable label ids.
+- **Video** annotation: frame navigation, keyframe markers, read-time
+  interpolation and tracks (needs `ffmpeg` on the device for frame previews).
+- **Exports**: Pascal VOC, COCO (including a dataset-level aggregate), YOLO,
+  CVAT 1.1 XML + ZIP and a lossless native project, plus importers for all of
+  them. Lossy conversions are always reported.
+- **Reliability**: autosave, revision restore, explicit crash-draft recovery,
+  conflict resolution, local analytics and snapshot backups.
+- **Optional multi-user mode** (sign-in, roles, admin user screen) — **off by
+  default**; set `DESHIA_MULTIUSER=1` to enable it.
+
+See the [feature parity notes](docs/rooyacvat-parity.md) for the worked port,
+[optional multi-user mode](docs/optional-auth.md) for the flag, and the
+[complete build guide](docs/BUILD-ANNOTATION-TOOL.md) if you want to build your
+own annotation tool with these patterns.
+
 ## Contents
 
 - [Key features](#key-features) · [Annotation model](#annotation-model) · [Rickshaw / E-Rickshaw schema](#built-in-rickshaw--e-rickshaw-schema)
 - [Bounding boxes & colors](#bounding-boxes--colors) · [Dataset structure & export](#dataset-structure--export)
 - [Architecture](#architecture) · [Tech stack](#tech-stack) · [Getting started](#getting-started) · [Scripts](#scripts) · [Project structure](#project-structure)
 - [Desktop builds](#building-the-desktop-app) · [Testing](#testing) · [Docs](#documentation) · [Roadmap](#roadmap) · [Contributing](#contributing) · [License](#license)
+- [Build an annotation tool](docs/BUILD-ANNOTATION-TOOL.md) · [Reusable agent skill](.claude/skills/annotation-tool-builder/SKILL.md) · [Code of conduct](CODE_OF_CONDUCT.md)
 
 ## Key features
 
@@ -53,7 +82,7 @@ Everything listed here is implemented today. Planned work lives in the [Roadmap]
 | **Visibility states**         | Each component can be marked `VISIBLE`, `OCCLUDED`, or `NOT_VISIBLE`; the schema decides when a box is required.                                                                                                                                                  |
 | **Privacy face mosaic**       | Hide human faces with a resizable circular tool. Each region is pixelated with a hard, **irreversible mosaic** baked into every exported copy (RAW, ANNOTATED, and visualizations) — source images are never modified, and redactions survive class/view changes. |
 | **Autosave & crash recovery** | Drafts persist continuously inside transactions; an append-only `annotation_events` log makes any interrupted session resumable to exact state.                                                                                                                   |
-| **Multi-format export**       | Every submission writes **Pascal VOC XML + COCO JSON + YOLO TXT** side by side, plus clean RAW / ANNOTATED image copies and a box-rendered preview — through a verified submission transaction.                                                                   |
+| **Multi-format export**       | Submissions write Pascal VOC XML, COCO JSON (plus a dataset-level aggregate), YOLO TXT, CVAT 1.1 XML + ZIP and a native lossless project — plus clean RAW / ANNOTATED copies and a box-rendered preview, through a verified transaction. |                                                                   |
 | **Progress & inventory**      | A per-workspace dashboard with pending / in-progress / annotated / skipped counts, plus a read-only scan of what actually exists on disk, broken down by class and view.                                                                                          |
 | **Navigation**                | Dataset-order Previous / Next paging and one-click resume of the next pending image.                                                                                                                                                                              |
 | **Desktop app**               | Native folder pickers and a packaged installer (Tauri v2) that runs without a dev server. Fully offline.                                                                                                                                                          |
@@ -402,15 +431,19 @@ Unit tests cover the pure logic: scanning, checksums, schema & annotation valida
 
 ## Documentation
 
-| Doc                                               | Topic                                                                       |
-| ------------------------------------------------- | --------------------------------------------------------------------------- |
-| [architecture.md](docs/architecture.md)           | Layers, runtime model, dev vs. packaged                                     |
-| [annotation-schema.md](docs/annotation-schema.md) | Authoring a schema for a new dataset                                        |
-| [dataset-format.md](docs/dataset-format.md)       | Input expectations & classification                                         |
-| [export-format.md](docs/export-format.md)         | VOC / COCO / YOLO output, label map, visualizations, submission transaction |
-| [recovery.md](docs/recovery.md)                   | Draft detection and crash recovery                                          |
-| [development.md](docs/development.md)             | Local setup & workflow                                                      |
-| [claude-context.md](docs/claude-context.md)       | Context for AI coding agents                                                |
+| Doc                                                       | Topic                                                                       |
+| --------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [architecture.md](docs/architecture.md)                   | Layers, runtime model, dev vs. packaged                                     |
+| [annotation-schema.md](docs/annotation-schema.md)         | Authoring a schema for a new dataset                                        |
+| [dataset-format.md](docs/dataset-format.md)               | Input expectations & classification                                         |
+| [export-format.md](docs/export-format.md)                 | VOC / COCO / YOLO output, label map, visualizations, submission transaction |
+| [recovery.md](docs/recovery.md)                           | Draft detection and crash recovery                                          |
+| [development.md](docs/development.md)                     | Local setup & workflow                                                      |
+| [claude-context.md](docs/claude-context.md)               | Context for AI coding agents                                                |
+| [BUILD-ANNOTATION-TOOL.md](docs/BUILD-ANNOTATION-TOOL.md) | Full guide to building an annotation tool from scratch                      |
+| [rooyacvat-parity.md](docs/rooyacvat-parity.md)           | Worked CVAT-style feature port and honest status                            |
+| [optional-auth.md](docs/optional-auth.md)                 | Opt-in multi-user mode                                                      |
+| [geometry-and-schema.md](docs/geometry-and-schema.md)     | Recursive schema and geometry engine                                        |
 
 ## Roadmap
 
@@ -418,17 +451,20 @@ Implemented:
 
 - [x] Schema-driven annotation engine + built-in Rickshaw / E-Rickshaw schema
 - [x] Autosave, append-only event log, and crash recovery
-- [x] Multi-format export — Pascal VOC, COCO, and YOLO — via a verified submission transaction
-- [x] Box-rendered visualizations kept separate from the clean dataset
-- [x] Privacy face-mosaic redaction baked into every exported copy
+- [x] Multi-format export — Pascal VOC, COCO, YOLO, CVAT XML + ZIP, native project
+- [x] Generalized Objects editor with 8 geometry kinds, attributes and CVAT tools
+- [x] Local schema editor with immutable published versions
+- [x] Video frames, tracks, keyframes and interpolation (ffmpeg optional)
+- [x] Keyboard-first editing, revision restore and explicit crash recovery
+- [x] Privacy face-mosaic and label-driven redaction baked into exported copies
 - [x] Packaged desktop app (Tauri v2 + bundled Node server)
+- [x] Optional multi-user mode behind `DESHIA_MULTIUSER=1`
 
-Planned:
+Out of scope (single-user product decision):
 
-- [ ] Schema editor UI (author datasets without code)
-- [ ] Keyboard-first annotation flow & shortcuts
-- [ ] Polygon / segmentation annotation
-- [ ] Multi-annotator review & inter-annotator agreement tooling
+- [ ] Remote identity providers, hosted teams, assignments and review approvals
+- [ ] Cloud storage adapters and remote inference
+- [ ] Brush/mask, skeleton, relations and tags annotation types
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 

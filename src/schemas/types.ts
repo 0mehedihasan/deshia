@@ -21,6 +21,8 @@ export interface ComponentDef {
   allowedVisibilities: Visibility[];
   /** Optional annotator hint shown in the UI. */
   hint?: string;
+  /** Optional entity instance represented by this component's annotation boxes. */
+  entityInstance?: { type: string; categoryKey: string };
 }
 
 export interface ViewDef {

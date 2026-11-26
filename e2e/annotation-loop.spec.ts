@@ -36,8 +36,6 @@ function makeFixtures(): { root: string; sourceDir: string; outputDir: string } 
   return { root, sourceDir, outputDir };
 }
 
-// PLACEHOLDER_E2E_BODY
-
 test.describe('DeshiA annotation loop', () => {
   test('create → scan → annotate (distinct colors) → save/resume → submit', async ({ page }) => {
     const fx = makeFixtures();
@@ -68,15 +66,15 @@ test.describe('DeshiA annotation loop', () => {
     await expect(rearItem).toBeVisible();
 
     // Distinct components must get visibly distinct box colors (golden rule #6).
-    const bodyColor = await bodyItem.locator('span.h-3.w-3').first().evaluate(
-      (el) => getComputedStyle(el).backgroundColor,
-    );
-    const rearColor = await rearItem.locator('span.h-3.w-3').first().evaluate(
-      (el) => getComputedStyle(el).backgroundColor,
-    );
+    const bodyColor = await bodyItem
+      .locator('span.h-3.w-3')
+      .first()
+      .evaluate((el) => getComputedStyle(el).backgroundColor);
+    const rearColor = await rearItem
+      .locator('span.h-3.w-3')
+      .first()
+      .evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(bodyColor).not.toEqual(rearColor);
-
-    // PLACEHOLDER_E2E_DRAW
 
     // 5. Draw one box per required component by arming it and dragging on the
     // canvas. The two draws are placed in different regions so the second

@@ -1,6 +1,12 @@
 import { and, asc, desc, eq, gt, lt, lte, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
-import { images, workspaces, type ImageRow, type NewImageRow } from '@/db/schema';
+import {
+  images,
+  sourceImageDuplicates,
+  workspaces,
+  type ImageRow,
+  type NewImageRow,
+} from '@/db/schema';
 import type { ImageStatus } from '@/types/domain';
 import { newId } from './ids';
 
@@ -19,8 +25,62 @@ export interface InsertImageInput {
   height: number;
   checksum: string;
   modifiedAt: number;
+  detectedFormat?: string | null;
+  mimeType?: string | null;
+  colorMode?: string | null;
+  metadataStatus?: 'PENDING' | 'ANALYZED' | 'FAILED';
+  metadataError?: string | null;
+  status?: ImageStatus;
   isDuplicate?: boolean;
   duplicateOfId?: string | null;
+  mediaKind?: 'IMAGE' | 'VIDEO';
+  durationMs?: number | null;
+  fps?: number | null;
+  frameCount?: number | null;
+}
+
+export interface SourceImageDuplicateInput {
+  workspaceId: string;
+  duplicateOfImageId: string | null;
+  originalFilename: string;
+  originalPath: string;
+  extension: string;
+  detectedFormat: string;
+  mimeType: string;
+  colorMode: string | null;
+  width: number;
+  height: number;
+  fileSize: number;
+  checksum: string;
+  modifiedAt: number;
+}
+
+/** Idempotently refresh source duplicate metadata without creating image rows. */
+export function upsertSourceImageDuplicates(inputs: SourceImageDuplicateInput[]): void {
+  if (inputs.length === 0) return;
+  db.transaction((tx) => {
+    for (const input of inputs) {
+      tx.insert(sourceImageDuplicates)
+        .values({ id: newId('dup'), ...input })
+        .onConflictDoUpdate({
+          target: [sourceImageDuplicates.workspaceId, sourceImageDuplicates.originalPath],
+          set: {
+            duplicateOfImageId: input.duplicateOfImageId,
+            originalFilename: input.originalFilename,
+            extension: input.extension,
+            detectedFormat: input.detectedFormat,
+            mimeType: input.mimeType,
+            colorMode: input.colorMode,
+            width: input.width,
+            height: input.height,
+            fileSize: input.fileSize,
+            checksum: input.checksum,
+            modifiedAt: input.modifiedAt,
+          },
+        })
+        .run();
+    }
+  });
 }
 
 /** Next monotonic dataset index for a workspace (max+1), never a file count. */
@@ -57,12 +117,21 @@ export function insertImages(inputs: InsertImageInput[]): ImageRow[] {
         originalFilename: input.originalFilename,
         originalPath: input.originalPath,
         extension: input.extension,
+        detectedFormat: input.detectedFormat ?? null,
+        mimeType: input.mimeType ?? null,
+        colorMode: input.colorMode ?? null,
+        metadataStatus: input.metadataStatus ?? 'PENDING',
+        metadataError: input.metadataError ?? null,
         fileSize: input.fileSize,
         width: input.width,
         height: input.height,
         checksum: input.checksum,
         modifiedAt: input.modifiedAt,
-        status: 'PENDING',
+        mediaKind: input.mediaKind ?? 'IMAGE',
+        durationMs: input.durationMs ?? null,
+        fps: input.fps ?? null,
+        frameCount: input.frameCount ?? null,
+        status: input.status ?? 'PENDING',
         isDuplicate: input.isDuplicate ?? false,
         duplicateOfId: input.duplicateOfId ?? null,
       };
@@ -72,6 +141,75 @@ export function insertImages(inputs: InsertImageInput[]): ImageRow[] {
     }
     return inserted;
   });
+}
+
+export function getImagesNeedingMetadata(
+  workspaceId: string,
+  afterDatasetIndex: number,
+  retryFailed: boolean,
+  limit: number,
+  verifyAll = false,
+): ImageRow[] {
+  return db
+    .select()
+    .from(images)
+    .where(
+      and(
+        eq(images.workspaceId, workspaceId),
+        gt(images.datasetIndex, afterDatasetIndex),
+        verifyAll
+          ? sql`1 = 1`
+          : retryFailed
+            ? sql`${images.metadataStatus} IN ('PENDING', 'FAILED')`
+            : eq(images.metadataStatus, 'PENDING'),
+      ),
+    )
+    .orderBy(asc(images.datasetIndex))
+    .limit(limit)
+    .all();
+}
+
+export function updateImageMetadata(
+  id: string,
+  input: {
+    detectedFormat: string | null;
+    mimeType: string | null;
+    colorMode: string | null;
+    metadataStatus: 'PENDING' | 'ANALYZED' | 'FAILED';
+    metadataError: string | null;
+    width?: number;
+    height?: number;
+    fileSize?: number;
+    modifiedAt?: number;
+    checksum?: string;
+  },
+): void {
+  db.update(images)
+    .set({ ...input, updatedAt: Date.now() })
+    .where(eq(images.id, id))
+    .run();
+}
+
+export function metadataStatusCounts(workspaceId: string): {
+  total: number;
+  pending: number;
+  analyzed: number;
+  failed: number;
+} {
+  const rows = db
+    .select({ status: images.metadataStatus, count: sql<number>`count(*)` })
+    .from(images)
+    .where(eq(images.workspaceId, workspaceId))
+    .groupBy(images.metadataStatus)
+    .all();
+  const result = { total: 0, pending: 0, analyzed: 0, failed: 0 };
+  for (const row of rows) {
+    result.total += row.count;
+    if (row.status === 'PENDING') result.pending = row.count;
+    else if (row.status === 'ANALYZED') result.analyzed = row.count;
+    else if (row.status === 'FAILED') result.failed = row.count;
+  }
+  return result;
 }
 
 export function getImage(id: string): ImageRow | undefined {

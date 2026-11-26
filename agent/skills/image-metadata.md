@@ -1,0 +1,3 @@
+# Image metadata subsystem notes
+
+Keep image metadata extraction pure and server-side in `src/core/scanner`. Use Sharp metadata only (no pixel decode beyond the library's header inspection), and `sha256OfFile` streaming. Preserve the supported extension list in `src/types/domain.ts`. Database reads/writes must stay in `src/db/repositories`, with server-action orchestration under `src/app/actions`. Any backfill should be bounded, resumable by stable dataset index, and never write to source paths. Keep report generation deterministic except for explicit generation timestamp and never include absolute source paths.

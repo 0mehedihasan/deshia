@@ -77,7 +77,11 @@ pnpm typecheck
 pnpm lint
 pnpm test        # Vitest unit tests (src/**/*.test.ts)
 pnpm test:e2e    # Playwright (e2e/)
+pnpm ci:check    # exact CI pipeline: frozen install → typecheck → lint → test → build
 ```
+
+Run `pnpm ci:check` before pushing; it is the same sequence as
+`.github/workflows/ci.yml`, so a green local run means the workflow should pass.
 
 Add unit tests for pure logic (scanner, checksum, bbox, color, filenames, VOC,
 validation, recovery). Prefer writing a failing test before fixing a bug. See

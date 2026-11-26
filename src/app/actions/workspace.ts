@@ -6,7 +6,18 @@ import { ensureDatabaseReady } from '@/db/bootstrap';
 import { workspaceRepo } from '@/db/repositories';
 import { getBuiltInSchema, RICKSHAW_SCHEMA } from '@/schemas';
 import { ensureWorkspaceOutputScaffold } from '@/core/exporter/output-tree';
+import { requireUser } from '@/core/auth/session';
 import { DELETE_CONFIRM_WORD } from './workspace-constants';
+
+/** Returns an error string when multi-user mode has no valid session. */
+function authError(): string | null {
+  try {
+    requireUser();
+    return null;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
 
 /**
  * Workspace application service (server actions).
@@ -38,6 +49,8 @@ async function isDirectory(p: string): Promise<boolean> {
 export async function createWorkspaceAction(
   input: CreateWorkspaceFormInput,
 ): Promise<CreateWorkspaceResult> {
+  const denied = authError();
+  if (denied) return { ok: false, error: denied };
   ensureDatabaseReady();
 
   const name = input.name.trim();
@@ -49,13 +62,22 @@ export async function createWorkspaceAction(
   if (!outputDir) return { ok: false, error: 'An output folder is required.' };
 
   if (!(await isDirectory(sourceDir))) {
-    return { ok: false, error: `Source folder does not exist or is not a directory:\n${sourceDir}` };
+    return {
+      ok: false,
+      error: `Source folder does not exist or is not a directory:\n${sourceDir}`,
+    };
   }
   if (!(await isDirectory(outputDir))) {
-    return { ok: false, error: `Output folder does not exist or is not a directory:\n${outputDir}` };
+    return {
+      ok: false,
+      error: `Output folder does not exist or is not a directory:\n${outputDir}`,
+    };
   }
   if (sourceDir === outputDir) {
-    return { ok: false, error: 'Source and output folders must be different (source is read-only).' };
+    return {
+      ok: false,
+      error: 'Source and output folders must be different (source is read-only).',
+    };
   }
 
   const schema = getBuiltInSchema(input.schemaId ?? RICKSHAW_SCHEMA.id) ?? RICKSHAW_SCHEMA;
@@ -99,6 +121,7 @@ export async function renameWorkspaceAction(
   input: RenameWorkspaceFormInput,
 ): Promise<RenameWorkspaceResult> {
   try {
+    requireUser();
     ensureDatabaseReady();
     const id = input.id.trim();
     const name = input.name.trim();
@@ -126,6 +149,7 @@ export async function deleteWorkspaceAction(
   input: DeleteWorkspaceFormInput,
 ): Promise<DeleteWorkspaceResult> {
   try {
+    requireUser();
     ensureDatabaseReady();
     const id = input.id.trim();
     if (!id) return { ok: false, error: 'Missing workspace id.' };

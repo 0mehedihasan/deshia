@@ -12,8 +12,21 @@ import type { AnnotationSchema, ComponentDef } from './types';
 
 const ALL_VIS: ComponentDef['allowedVisibilities'] = ['VISIBLE', 'OCCLUDED', 'NOT_VISIBLE'];
 
-function required(key: string, label: string, hint?: string): ComponentDef {
-  return { key, label, required: true, box: 'required', allowedVisibilities: ALL_VIS, hint };
+function required(
+  key: string,
+  label: string,
+  hint?: string,
+  entityInstance?: ComponentDef['entityInstance'],
+): ComponentDef {
+  return {
+    key,
+    label,
+    required: true,
+    box: 'required',
+    allowedVisibilities: ALL_VIS,
+    hint,
+    entityInstance,
+  };
 }
 
 function optional(key: string, label: string, hint?: string): ComponentDef {
@@ -34,22 +47,38 @@ export const RICKSHAW_SCHEMA: AnnotationSchema = {
         {
           key: 'front',
           label: 'Front',
-          components: [required('rickshaw_body', 'Rickshaw Body'), required('steering_head', 'Steering Head')],
+          components: [
+            required('rickshaw_body', 'Rickshaw Body', undefined, {
+              type: 'vehicle',
+              categoryKey: 'rickshaw',
+            }),
+            required('steering_head', 'Steering Head'),
+          ],
         },
         {
           key: 'side',
           label: 'Side',
           components: [
-            required('rickshaw_body', 'Rickshaw Body'),
+            required('rickshaw_body', 'Rickshaw Body', undefined, {
+              type: 'vehicle',
+              categoryKey: 'rickshaw',
+            }),
             required('pedal_crank_assembly', 'Pedal / Crank Assembly'),
-            required('chain', 'Chain', 'A separate box — do not merge into Pedal / Crank Assembly.'),
+            required(
+              'chain',
+              'Chain',
+              'A separate box — do not merge into Pedal / Crank Assembly.',
+            ),
           ],
         },
         {
           key: 'back',
           label: 'Back',
           components: [
-            required('rickshaw_body', 'Rickshaw Body'),
+            required('rickshaw_body', 'Rickshaw Body', undefined, {
+              type: 'vehicle',
+              categoryKey: 'rickshaw',
+            }),
             required(
               'rear_drive_assembly',
               'Rear Drive Assembly',
@@ -67,7 +96,10 @@ export const RICKSHAW_SCHEMA: AnnotationSchema = {
           key: 'front',
           label: 'Front',
           components: [
-            required('e_rickshaw_body', 'E-Rickshaw Body'),
+            required('e_rickshaw_body', 'E-Rickshaw Body', undefined, {
+              type: 'vehicle',
+              categoryKey: 'e_rickshaw',
+            }),
             required('steering_head', 'Steering Head'),
             required('electric_control_circuit', 'Electric Control / Circuit'),
           ],
@@ -76,7 +108,10 @@ export const RICKSHAW_SCHEMA: AnnotationSchema = {
           key: 'side',
           label: 'Side',
           components: [
-            required('e_rickshaw_body', 'E-Rickshaw Body'),
+            required('e_rickshaw_body', 'E-Rickshaw Body', undefined, {
+              type: 'vehicle',
+              categoryKey: 'e_rickshaw',
+            }),
             required('electric_drive_area', 'Electric Drive Area'),
             optional('pedal', 'Pedal', 'Optional — an e-rickshaw may or may not have a pedal.'),
           ],
@@ -85,7 +120,10 @@ export const RICKSHAW_SCHEMA: AnnotationSchema = {
           key: 'back',
           label: 'Back',
           components: [
-            required('e_rickshaw_body', 'E-Rickshaw Body'),
+            required('e_rickshaw_body', 'E-Rickshaw Body', undefined, {
+              type: 'vehicle',
+              categoryKey: 'e_rickshaw',
+            }),
             required('electric_motor', 'Electric Motor'),
           ],
         },

@@ -63,7 +63,7 @@ Directory map (`src/`):
 | `app/` | Next.js App Router routes, layouts, server actions, route handlers |
 | `components/` | Reusable UI (incl. `components/ui` shadcn primitives) |
 | `features/` | Screen-level feature modules: workspace, dataset, annotation, dashboard, export, settings |
-| `core/scanner/` | Recursive scan, checksum, Sharp metadata, classification |
+| `core/scanner/` | Recursive scan, checksum, Sharp original-image metadata, classification |
 | `core/filesystem/` | Path validation, filename sanitization, output tree |
 | `core/annotation/` | Schema-driven engine, color palette, bbox math, validation |
 | `core/recovery/` | Draft detection + resume |
@@ -140,6 +140,24 @@ changes available components. **The UI is generated from the schema.**
 
 Visibility: `VISIBLE` (require box when schema says so) · `OCCLUDED`
 (schema-defined) · `NOT_VISIBLE` (no box required). All schema-configurable.
+Boxes explicitly marked `NOT_VISIBLE` are retained in storage and statistics,
+but excluded from object-detection exports by the canonical exporter selector.
+Validation and analytics must report this exclusion count and reason; never
+silently treat it as a missing/corrupt export.
+
+**Optional multi-user mode is OFF by default.** Set `DESHIA_MULTIUSER=1` to
+enable sign-in, ADMIN/ANNOTATOR/REVIEWER roles and `/admin/users`; the default
+single-user path never reads sessions. Multi-user tables live in migration
+`0009_optional_auth.sql` and actions guard writes via `core/auth/session.ts`.
+
+Alongside the original component workflow, the **Objects editor** supports many
+independent, schema-labelled objects per frame: all eight geometry kinds
+(rectangle, rotated box, ellipse, polygon, polyline, point, points, cuboid),
+attributes, occlusion, z-order, visibility/lock, tracks, per-frame video
+annotation with interpolation, CVAT tools, undo/redo, revision restore and crash
+drafts. The ontology for this mode is a user-authored recursive schema edited at
+`/workspace/[id]/schema`; published schema versions are immutable. See
+`docs/rooyacvat-parity.md` for the full feature map and status.
 
 Annotation scope: annotate **major** body / structural / mechanical / electrical
 / class-discriminative components only. Do **not** annotate decorative parts,
@@ -237,7 +255,12 @@ Commands: `pnpm dev` · `pnpm typecheck` · `pnpm lint` · `pnpm test` ·
 ## 15. Where to look
 
 `docs/architecture.md`, `docs/annotation-schema.md`, `docs/dataset-format.md`,
-`docs/export-format.md`, `docs/development.md`, `docs/recovery.md`,
-`docs/claude-context.md`. Subsystem playbooks: `.claude/skills/*/SKILL.md`.
+`docs/export-format.md`, `docs/image-metadata.md`, `docs/development.md`, `docs/recovery.md`,
+`docs/BUILD-ANNOTATION-TOOL.md` (full guide for building an annotation tool from
+scratch; agent playbook: `.claude/skills/annotation-tool-builder/`),
+`docs/geometry-and-schema.md`, `docs/optional-auth.md` (opt-in multi-user layer),
+`docs/rooyacvat-parity.md` (feature-parity analysis and
+phased plan; phase 1 added the generalized multi-object editor), `docs/claude-context.md`.
+Subsystem playbooks: `.claude/skills/*/SKILL.md`.
 Contributor/agent workflow: `CONTRIBUTING.md` and `AGENTS.md`.
 

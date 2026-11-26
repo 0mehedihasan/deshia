@@ -5,6 +5,24 @@
   "description": "DeshiA (Deshi Annotation) — professional image annotation workstation for computer vision research.",
   "author": "Md. Mehedi Hasan",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0mehedihasan/deshia.git"
+  },
+  "homepage": "https://github.com/0mehedihasan/deshia#readme",
+  "bugs": {
+    "url": "https://github.com/0mehedihasan/deshia/issues"
+  },
+  "keywords": [
+    "annotation",
+    "computer-vision",
+    "dataset",
+    "image-annotation",
+    "video-annotation",
+    "cvat",
+    "tauri",
+    "offline"
+  ],
   "type": "module",
   "packageManager": "pnpm@9.12.3",
   "engines": {
@@ -21,6 +39,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "ci:check": "pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "tauri": "tauri",

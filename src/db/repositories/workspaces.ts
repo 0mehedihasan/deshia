@@ -37,6 +37,20 @@ export function mostRecentWorkspace(): WorkspaceRow | undefined {
   return db.select().from(workspaces).orderBy(desc(workspaces.updatedAt)).limit(1).get();
 }
 
+/** Point a workspace at a user-authored schema version. */
+export function setWorkspaceSchema(
+  id: string,
+  schemaId: string,
+  schemaVersion: number,
+): WorkspaceRow | undefined {
+  return db
+    .update(workspaces)
+    .set({ schemaId, schemaVersion, updatedAt: Date.now() })
+    .where(eq(workspaces.id, id))
+    .returning()
+    .get();
+}
+
 export function touchWorkspace(id: string): void {
   db.update(workspaces).set({ updatedAt: Date.now() }).where(eq(workspaces.id, id)).run();
 }

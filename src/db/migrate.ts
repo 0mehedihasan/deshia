@@ -15,8 +15,12 @@ export function runMigrations(): void {
   migrate(db, { migrationsFolder: MIGRATIONS_DIR });
 }
 
-// Allow direct execution: `tsx src/db/migrate.ts`.
-if (require.main === module) {
+// Allow direct execution: `tsx src/db/migrate.ts`. Package type is "module",
+// so `require.main` is unavailable — compare the entrypoint URL instead.
+const isDirectRun =
+  typeof process.argv[1] === 'string' &&
+  import.meta.url === new URL(`file://${process.argv[1]}`).href;
+if (isDirectRun) {
   try {
     runMigrations();
     // eslint-disable-next-line no-console

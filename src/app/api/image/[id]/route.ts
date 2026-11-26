@@ -23,6 +23,11 @@ const MIME: Record<string, string> = {
   webp: 'image/webp',
   heic: 'image/heic',
   heif: 'image/heif',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  avi: 'video/x-msvideo',
+  mkv: 'video/x-matroska',
+  webm: 'video/webm',
 };
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {

@@ -24,6 +24,11 @@ UI never reaches past the service layer into raw SQL or the filesystem.
 DeshiA needs Node-only libraries — Drizzle + `better-sqlite3` (SQLite) and
 `sharp` (image metadata/copies). A pure Tauri webview has no Node runtime, so:
 
+Image metadata is extracted in `src/core/scanner` from original file headers
+and streamed checksums. Dataset summaries and exports are derived through
+repository projections; bounded backfill and source verification are
+orchestrated by server actions. See [image-metadata.md](./image-metadata.md).
+
 - **The application logic runs inside the Next.js Node runtime** (server
   components, route handlers, server actions). This is where the DB, scanner,
   exporter, and recovery execute.
@@ -88,7 +93,7 @@ cannot cross-compile the bundled Node binary or the native
 
 | Module | Responsibility |
 | --- | --- |
-| `src/core/scanner` | Recursive discovery, SHA-256 checksum, Sharp metadata, duplicate/format classification |
+| `src/core/scanner` | Recursive discovery, SHA-256 checksum, Sharp original-image metadata, resolution aggregates |
 | `src/core/filesystem` | Path validation (no traversal), filename sanitization, output-tree creation |
 | `src/core/annotation` | Schema-driven engine, bbox math, deterministic color palette, pre-submit validation |
 | `src/core/exporter` | Pascal VOC XML, filename generation, submission transaction |
@@ -117,3 +122,17 @@ cannot cross-compile the bundled Node binary or the native
   per-box storage and no render flicker.
 - **String ontology keys** in the DB, resolved against a versioned schema — the
   engine stays dataset-agnostic.
+
+## Dataset statistics
+
+`/workspace/[id]/statistics` builds an on-demand statistics projection through
+`db/repositories/analytics.ts`; the pure calculation layer lives in
+`core/analytics/statistics.ts`. Workspace navigation/re-entry recalculates from
+current image, annotation, box, and schema records instead of trusting manually
+maintained counters. JSON snapshots are saved under
+`<output>/DeshiA_Output/STATISTICS/` and JSON, CSV, and Markdown reports are
+available from the page. The page validates per-image Pascal VOC, COCO, and
+YOLO outputs against DB boxes, schema labels, expected image references, and
+exported image presence. Geometry findings are separated into errors, review
+warnings, and informational large-box notes. Full source-filesystem scans,
+polygon/segmentation analyzers, and PDF rendering are not currently provided.

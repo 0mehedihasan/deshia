@@ -7,4 +7,8 @@ export * as imageRepo from './images';
 export * as annotationRepo from './annotations';
 export * as eventRepo from './events';
 export * as exportJobRepo from './export-jobs';
+export * as analyticsRepo from './analytics';
+export * as objectRepo from './objects';
+export * as schemaRepo from './schemas';
+export * as userRepo from './users';
 export { newId } from './ids';

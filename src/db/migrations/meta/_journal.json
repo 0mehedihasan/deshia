@@ -15,6 +15,62 @@
       "when": 1759065300000,
       "tag": "0001_add_redactions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791456914000,
+      "tag": "0002_add_vehicle_instance_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792051200000,
+      "tag": "0003_add_image_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792137600000,
+      "tag": "0004_add_source_image_duplicates",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792224000000,
+      "tag": "0005_annotation_objects",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792310400000,
+      "tag": "0006_schema_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792396800000,
+      "tag": "0007_video_frames",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792483200000,
+      "tag": "0008_save_revision",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792569600000,
+      "tag": "0009_optional_auth",
+      "breakpoints": true
     }
   ]
 }

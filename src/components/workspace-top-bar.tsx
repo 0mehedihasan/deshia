@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { LayoutDashboard, PenTool, Settings } from 'lucide-react';
+import { BarChart3, CircleHelp, LayoutDashboard, PenTool, Settings, Tags } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { DeshiaLogo } from '@/components/deshia-logo';
 import { cn } from '@/lib/utils';
@@ -17,9 +17,15 @@ export function WorkspaceTopBar({
 }: {
   workspaceId: string;
   name: string;
-  active: 'dashboard' | 'annotate' | 'settings';
+  active: 'dashboard' | 'annotate' | 'analytics' | 'schema' | 'settings';
 }) {
   const tabs = [
+    {
+      key: 'analytics' as const,
+      href: `/workspace/${workspaceId}/statistics`,
+      label: 'Statistics',
+      icon: BarChart3,
+    },
     {
       key: 'dashboard' as const,
       href: `/workspace/${workspaceId}`,
@@ -31,6 +37,12 @@ export function WorkspaceTopBar({
       href: `/workspace/${workspaceId}/annotate`,
       label: 'Annotate',
       icon: PenTool,
+    },
+    {
+      key: 'schema' as const,
+      href: `/workspace/${workspaceId}/schema`,
+      label: 'Schemas',
+      icon: Tags,
     },
     {
       key: 'settings' as const,
@@ -76,7 +88,14 @@ export function WorkspaceTopBar({
             </Link>
           );
         })}
-        <div className="ml-2">
+        <div className="ml-2 flex items-center gap-2">
+          <Link
+            href="/manual"
+            title="Manual"
+            className="rounded p-1.5 text-text-secondary transition-colors hover:bg-elevated hover:text-text"
+          >
+            <CircleHelp size={16} />
+          </Link>
           <ThemeToggle />
         </div>
       </nav>

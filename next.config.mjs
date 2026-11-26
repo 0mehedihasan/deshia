@@ -32,6 +32,10 @@ const nextConfig = {
     // it to an empty module instead of failing the build.
     config.resolve = config.resolve ?? {};
     config.resolve.alias = { ...config.resolve.alias, canvas: false };
+    // Prefer TypeScript sources over a same-name emitted JavaScript artifact.
+    // In particular this keeps src/types/domain.ts authoritative if an old
+    // domain.js is left in a working tree by an external tool.
+    config.resolve.extensions = ['.ts', '.tsx', '.js', '.jsx', '.json', '...'];
     return config;
   },
 };

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Build an annotation tool (guide)
+    url: https://github.com/0mehedihasan/deshia/blob/main/docs/BUILD-ANNOTATION-TOOL.md
+    about: Read the full architecture and phase guide before proposing large features.
+  - name: Security report
+    url: https://github.com/0mehedihasan/deshia/blob/main/SECURITY.md
+    about: Private vulnerability reporting instructions — do not open a public issue.

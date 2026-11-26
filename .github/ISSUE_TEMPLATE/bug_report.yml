@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in DeshiA does not work as expected
+title: '[Bug]: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not include private image paths, dataset
+        contents, or credentials. For security issues use SECURITY.md instead.
+  - type: input
+    id: version
+    attributes:
+      label: DeshiA version
+      placeholder: '0.1.0 / commit hash'
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Browser dev server
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, expected result, actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Console output, app log, or error message (redact private paths).
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I ran `pnpm typecheck`, `pnpm lint` and `pnpm test` where relevant
+          required: false

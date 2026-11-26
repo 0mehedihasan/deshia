@@ -19,6 +19,10 @@ const componentSchema = z
     box: z.enum(['required', 'optional', 'none']),
     allowedVisibilities: z.array(visibilitySchema).min(1),
     hint: z.string().max(240).optional(),
+    entityInstance: z.object({
+      type: z.string().min(1).max(64).regex(KEY_RE),
+      categoryKey: z.string().min(1).max(64).regex(KEY_RE),
+    }).strict().optional(),
   })
   .strict();
 

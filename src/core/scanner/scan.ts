@@ -2,7 +2,8 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { ScanEntryKind } from '@/types/domain';
 import { sha256OfFile } from './checksum';
-import { isSupportedImage, normalizeExtension, readImageMetadata } from './metadata';
+import { analyzeSourceImage, isSupportedImage, normalizeExtension } from './metadata';
+import { analyzeVideo, isSupportedVideo } from './video';
 import { collectFiles, type WalkOptions } from './walk';
 
 /**
@@ -23,6 +24,13 @@ export interface ScanEntry {
   width?: number;
   height?: number;
   checksum?: string;
+  detectedFormat?: string;
+  mimeType?: string;
+  colorMode?: string | null;
+  mediaKind?: 'IMAGE' | 'VIDEO';
+  durationMs?: number | null;
+  fps?: number | null;
+  frameCount?: number | null;
   /** Absolute path of the first file that carried this checksum. */
   duplicateOf?: string;
   error?: string;
@@ -55,13 +63,59 @@ export async function scanDirectory(root: string, options: ScanOptions = {}): Pr
     const filename = path.basename(absolutePath);
     const extension = normalizeExtension(absolutePath);
 
+    if (isSupportedVideo(absolutePath)) {
+      try {
+        const source = await analyzeVideo(absolutePath);
+        const priorPath = seenChecksums.get(source.checksum);
+        const base: ScanEntry = {
+          kind: priorPath ? 'DUPLICATE' : 'SUPPORTED',
+          absolutePath,
+          filename,
+          extension,
+          fileSize: source.fileSize,
+          modifiedAt: source.modifiedAt,
+          width: source.width,
+          height: source.height,
+          checksum: source.checksum,
+          detectedFormat: source.detectedFormat,
+          mimeType: source.mimeType,
+          colorMode: null,
+          mediaKind: 'VIDEO',
+          durationMs: source.durationMs,
+          fps: source.fps,
+          frameCount: source.frameCount,
+        };
+        if (priorPath) {
+          base.duplicateOf = priorPath;
+          duplicates += 1;
+        } else {
+          seenChecksums.set(source.checksum, absolutePath);
+          supported += 1;
+        }
+        entries.push(base);
+      } catch (err) {
+        errors += 1;
+        entries.push({
+          kind: 'ERROR',
+          absolutePath,
+          filename,
+          extension,
+          fileSize: 0,
+          modifiedAt: 0,
+          mediaKind: 'VIDEO',
+          error: (err as Error).message,
+        });
+      }
+      continue;
+    }
+
     if (!isSupportedImage(absolutePath)) {
       unsupported += 1;
       entries.push({
         kind: 'UNSUPPORTED',
         absolutePath,
         filename,
-        extension,
+        extension: null,
         fileSize: 0,
         modifiedAt: 0,
       });
@@ -69,19 +123,21 @@ export async function scanDirectory(root: string, options: ScanOptions = {}): Pr
     }
 
     try {
-      const info = await stat(absolutePath);
-      const checksum = await sha256OfFile(absolutePath);
-      const meta = await readImageMetadata(absolutePath);
+      const source = await analyzeSourceImage(absolutePath);
+      const { metadata: meta, checksum } = source;
       const priorPath = seenChecksums.get(checksum);
       const base: ScanEntry = {
         kind: priorPath ? 'DUPLICATE' : 'SUPPORTED',
         absolutePath,
         filename,
         extension,
-        fileSize: info.size,
-        modifiedAt: Math.round(info.mtimeMs),
+        fileSize: source.fileSize,
+        modifiedAt: source.modifiedAt,
         width: meta.width,
         height: meta.height,
+        detectedFormat: meta.detectedFormat,
+        mimeType: meta.mimeType,
+        colorMode: meta.colorMode,
         checksum,
       };
       if (priorPath) {
@@ -93,14 +149,26 @@ export async function scanDirectory(root: string, options: ScanOptions = {}): Pr
       }
       entries.push(base);
     } catch (err) {
+      let fileSize = 0;
+      let modifiedAt = 0;
+      let checksum: string | undefined;
+      try {
+        const info = await stat(absolutePath);
+        fileSize = info.size;
+        modifiedAt = Math.round(info.mtimeMs);
+        checksum = await sha256OfFile(absolutePath);
+      } catch {
+        // Preserve the extraction error below; source can be missing or unreadable.
+      }
       errors += 1;
       entries.push({
         kind: 'ERROR',
         absolutePath,
         filename,
         extension,
-        fileSize: 0,
-        modifiedAt: 0,
+        fileSize,
+        modifiedAt,
+        ...(checksum ? { checksum } : {}),
         error: (err as Error).message,
       });
     }

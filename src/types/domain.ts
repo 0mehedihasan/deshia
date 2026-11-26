@@ -6,6 +6,8 @@
  * live in `db/schema`; mapping happens in the repositories.
  */
 
+import type { Geometry } from '@/core/geometry/types';
+
 /** Lifecycle status of a single image in a workspace. */
 export const IMAGE_STATUSES = ['PENDING', 'IN_PROGRESS', 'ANNOTATED', 'SKIPPED', 'ERROR'] as const;
 export type ImageStatus = (typeof IMAGE_STATUSES)[number];
@@ -56,6 +58,8 @@ export interface AnnotationBox {
   id: string;
   /** Stable component key from the schema (e.g. "rickshaw_body"). */
   componentKey: string;
+  /** Explicit cross-image vehicle identity when recorded; never inferred. */
+  vehicleInstanceId?: string | null;
   box: NormalizedBox;
   visibility: Visibility;
   createdAt: number;
@@ -86,6 +90,67 @@ export interface RedactionCircle {
   r: number;
 }
 
+/**
+ * Geometry types an annotation object may carry. This is an open vocabulary in
+ * the schema: the engine never hardcodes a dataset ontology, only these
+ * domain-neutral shape kinds. COCO/YOLO/VOC/CVAT exporters consume them through
+ * the geometry union; formats without a native kind report an explicit loss.
+ */
+export const GEOMETRY_TYPES = [
+  'RECTANGLE',
+  'ROTATED_BOX',
+  'POLYGON',
+  'POLYLINE',
+  'POINT',
+  'POINTS',
+  'ELLIPSE',
+  'CUBOID',
+] as const;
+export type GeometryType = (typeof GEOMETRY_TYPES)[number];
+
+/** Attribute values carried by an object, keyed by stable schema attribute id. */
+export type AttributeValue = string | number | boolean | string[] | null;
+
+/**
+ * One independent annotated object in an image (many per image).
+ *
+ * This is the generalized counterpart of the original component-box model:
+ * instead of one vehicle decomposed into named parts, a frame can contain N
+ * objects, each with its own label, geometry, attributes, and state flags.
+ * Geometry is always stored in normalized image coordinates; occluded/zOrder
+ * follow CVAT semantics; `trackId` links the same object across video frames.
+ */
+export interface AnnotationObject {
+  id: string;
+  /** Stable label id from the published schema version (never a display name). */
+  labelId: string;
+  /** Denormalized display label, kept for readable exports and audit snapshots. */
+  labelName: string;
+  geometry: Geometry;
+  /** Schema-attribute values; keys are attribute ids. */
+  attributes: Record<string, AttributeValue>;
+  /** Object is partly hidden in the scene (CVAT `occluded`). */
+  occluded: boolean;
+  /** Stacking order inside the frame; higher draws on top (CVAT `z_order`). */
+  zOrder: number;
+  /** Annotator-visible on canvas; independent of `outside`. */
+  visible: boolean;
+  /** Locked objects cannot be edited until unlocked (server-enforced later). */
+  locked: boolean;
+  /** Persistent identity of the same object across frames (video tracks). */
+  trackId: string | null;
+  /** Frame index this object belongs to (0 for still images). */
+  frameNumber: number;
+  /** Tracked object has left the scene; closes a track segment. */
+  outside: boolean;
+  /** MANUAL by default; AI reserved for a future provider seam. */
+  source: 'MANUAL' | 'AI';
+  /** Model confidence for AI-assisted objects, null for manual ones. */
+  score: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** The full working annotation state for one image (draft or submitted). */
 export interface AnnotationState {
   imageId: string;
@@ -96,10 +161,14 @@ export interface AnnotationState {
   /** Per-component visibility, even for components with zero boxes. */
   componentVisibility: Record<string, Visibility>;
   boxes: AnnotationBox[];
+  /** Independent objects (many per image); schema-driven, geometry-generic. */
+  objects: AnnotationObject[];
   /** Circular face/privacy regions blurred into exported image copies. */
   redactions: RedactionCircle[];
   status: AnnotationStatus;
   annotationVersion: number;
+  /** Monotonic draft-save revision used for optimistic conflict detection. */
+  saveRevision: number;
   createdAt: number;
   updatedAt: number;
 }

@@ -11,6 +11,23 @@ not `NOT_VISIBLE`) and use the **schema component key** as the class name (e.g.
 `chain`, `rickshaw_body`) so the label is machine-stable and identical across
 formats.
 
+`NOT_VISIBLE` has an explicit export policy: boxes in this state remain in the
+annotation database and dataset statistics, but are excluded from object
+detection labels. This follows the annotation model, where `NOT_VISIBLE` does
+not require a box and a stored box in that state is advisory-invalid. The
+canonical selector in `src/core/exporter/annotation-selection.ts` is shared by
+all three generators and export validation. Statistics report internal,
+exportable, and excluded object counts (including exclusion reasons); a format
+cannot pass validation unless each parsed class and bounding box matches the
+canonical exportable records.
+
+Export validation compares each per-image file with the annotation records by
+class and geometry. It also checks image dimensions/references, valid class
+IDs, coordinate bounds, expected/missing files, and orphan files. `PASS` means
+the emitted files match the exportable annotation set; it does not assert
+annotation accuracy. Validation reports missing and extra/duplicate object
+counts as well as file-level issues.
+
 ## Output tree
 
 Written under the chosen output directory as `DeshiA_Output/`:

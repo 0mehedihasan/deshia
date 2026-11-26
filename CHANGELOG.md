@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — full CVAT-style toolset (single-user, DeshiA branding)
+
+- **Objects editor** alongside the original component workflow: many independent
+  schema-labelled objects per frame with eight geometry kinds (rectangle,
+  rotated box, ellipse, polygon, polyline, point, points, 8-corner cuboid),
+  attributes, occlusion, z-order, visibility/lock, tracks and per-frame video.
+- **Recursive schema system persisted in SQLite** with draft/published versions,
+  SQLite triggers enforcing immutability, a local schema editor, JSON import/export
+  and a migration from the legacy flat schema.
+- **CVAT-style canvas tools**: 2-point and 4-point rectangles, vertex
+  insert/delete, snapping, freehand, crosshair, live dimensions, marquee and
+  keyboard multi-select, clipboard, wheel zoom, pan, fit, four z-order moves and
+  bounded undo/redo.
+- **Video & tracks**: source scanning for MP4/MOV/AVI/MKV/WEBM, optional ffprobe
+  metadata, ffmpeg frame decoding with a bounded cache, timeline with keyframe
+  markers, read-time interpolation, keyframe promotion and track management.
+- **Exporters/importers**: CVAT 1.1 XML + stored ZIP, dataset-level aggregate
+  COCO, native lossless project, explicit loss reports, YOLO/COCO/VOC/CVAT/native
+  importers and label-driven export redaction.
+- **Reliability**: revision history with audited restore, IndexedDB crash drafts
+  with explicit Restore/Discard, optimistic-concurrency conflict resolution,
+  focus-trapped dialogs and an in-app manual.
+- **Local analytics** for generalized objects with Markdown report, and a
+  workspace snapshot backup with SHA-256 manifest.
+- **Optional multi-user layer** behind `DESHIA_MULTIUSER=1`: sign-in, roles and
+  an admin user screen; off by default so the normal path stays single-user.
+- **Open-source project files**: full build guide, reusable agent skill, issue
+  and PR templates, dependabot, code of conduct and repository metadata.
+
 ### Added
 
 - **Schema-driven annotation engine** (`src/core/annotation`) — resolves any

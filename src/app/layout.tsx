@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
+import { AuthStatus } from '@/components/auth-status';
 
 export const metadata: Metadata = {
   title: 'DeshiA — Deshi Annotation',
@@ -16,8 +17,15 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
-      <body className="min-h-full bg-bg font-sans text-text antialiased">{children}</body>
+    <html
+      lang="en"
+      className={`${GeistSans.variable} ${GeistMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-full bg-bg font-sans text-text antialiased">
+        {children}
+        <AuthStatus />
+      </body>
     </html>
   );
 }

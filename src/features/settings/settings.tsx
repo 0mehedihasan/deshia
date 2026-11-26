@@ -1,9 +1,14 @@
 'use client';
 
+import * as React from 'react';
+import { Archive, FolderOpen } from 'lucide-react';
 import { Panel, PanelBody, PanelHeader, PanelTitle } from '@/components/ui/panel';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { WorkspaceTopBar } from '@/components/workspace-top-bar';
 import { AppFooter } from '@/components/app-footer';
+import { selectDirectory } from '@/lib/native-dialog';
+import { backupWorkspaceAction } from '@/app/actions/backup';
 
 interface ComponentSummary {
   key: string;
@@ -40,6 +45,8 @@ const EXPORT_FORMATS: Array<{ label: string; status: 'ready' | 'declared' }> = [
   { label: 'Pascal VOC XML', status: 'ready' },
   { label: 'COCO JSON', status: 'ready' },
   { label: 'YOLO TXT', status: 'ready' },
+  { label: 'CVAT 1.1 XML (objects)', status: 'ready' },
+  { label: 'Native project JSON', status: 'ready' },
 ];
 
 function boxTone(box: ComponentSummary['box']) {
@@ -53,6 +60,23 @@ export function Settings({
   workspace: WorkspaceInfo;
   schema: SchemaSummary | null;
 }) {
+  const [backupDir, setBackupDir] = React.useState('');
+  const [backupStatus, setBackupStatus] = React.useState<string | null>(null);
+  const [backupBusy, setBackupBusy] = React.useState(false);
+
+  const runBackup = async () => {
+    setBackupBusy(true);
+    setBackupStatus(null);
+    try {
+      const res = await backupWorkspaceAction(workspace.id, backupDir);
+      setBackupStatus(res.ok ? `Snapshot written to ${res.path}` : `Backup failed: ${res.error}`);
+    } catch (err) {
+      setBackupStatus(`Backup failed: ${(err as Error).message}`);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-bg">
       <WorkspaceTopBar workspaceId={workspace.id} name={workspace.name} active="settings" />
@@ -79,6 +103,50 @@ export function Settings({
               Source and schema are fixed for a workspace to keep dataset indices and exports
               reproducible. Create a new workspace to annotate a different source or schema.
             </p>
+          </PanelBody>
+        </Panel>
+
+        <Panel>
+          <PanelHeader>
+            <PanelTitle>Local snapshot</PanelTitle>
+          </PanelHeader>
+          <PanelBody className="space-y-3">
+            <p className="text-meta text-muted">
+              Copy the checkpointed database and this workspace&apos;s output tree into a portable
+              folder with a checksum manifest. The live database is never overwritten; restoring is
+              a manual step performed with DeshiA closed.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="min-w-[18rem] flex-1 rounded-md border border-border-strong bg-elevated px-2.5 py-1.5 font-mono text-meta text-text"
+                value={backupDir}
+                onChange={(e) => setBackupDir(e.target.value)}
+                placeholder="Absolute folder for the snapshot"
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  const picked = await selectDirectory('Choose a backup folder');
+                  if (picked) setBackupDir(picked);
+                }}
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+                Browse
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => void runBackup()}
+                disabled={backupBusy || !backupDir.trim()}
+              >
+                <Archive className="h-3.5 w-3.5" />
+                {backupBusy ? 'Writing…' : 'Create snapshot'}
+              </Button>
+            </div>
+            {backupStatus && (
+              <p className="break-all text-meta text-text-secondary">{backupStatus}</p>
+            )}
           </PanelBody>
         </Panel>
 
