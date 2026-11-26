@@ -89,7 +89,7 @@
     "autoprefixer": "10.4.20",
     "eslint": "8.57.1",
     "eslint-config-next": "14.2.15",
-    "prettier": "3.3.3",
+    "prettier": "3.10.1",
     "prettier-plugin-tailwindcss": "0.6.8",
     "vitest": "2.1.4",
     "@vitest/coverage-v8": "2.1.4",
