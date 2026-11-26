@@ -22,15 +22,15 @@ An open-source, offline **desktop image-annotation workstation** for building st
 
 ## Overview
 
-**DeshiA (Deshi Annotation)** is a desktop workstation for turning a folder of raw images into a **clean, structured, reproducible computer-vision dataset**. A Next.js UI drives a local Node backend (SQLite + Sharp) inside a [Tauri v2](https://tauri.app) shell, so everything runs **offline on your machine** — no cloud, no uploads, and source images never leave the disk.
+**DeshiA (Deshi Annotation)** is a free, open-source desktop workstation for turning a folder of images or video into a **clean, structured, reproducible computer-vision dataset**. It is **not tied to one dataset**: the label ontology is data you author, and the same engine, canvas and exporters work for any project. A Next.js UI drives a local Node backend (SQLite + Sharp) inside a [Tauri v2](https://tauri.app) shell, so everything runs **offline on your machine** — no cloud, no uploads, and source media never leaves the disk.
 
 **The problem it solves.** Most annotation tools either live in the cloud, flatten everything to one label per box, or leave you to invent your own folder conventions. Research datasets need more: a controlled ontology, a consistent file layout, and outputs a trainer can consume without hand-fixing. DeshiA enforces that structure end to end and guarantees the on-disk result is reproducible from the recorded state.
 
-**Who it's for.** Computer-vision researchers, dataset builders, and ML engineers who need labeled detection data with a defensible, repeatable structure — and who want to keep their images local.
+**Who it's for.** Anyone who needs labeled data: computer-vision researchers, dataset builders, ML engineers, students and hobbyists. You do not need a team account, a server or a paid plan — download it, point it at a folder, define your labels and start annotating. If you do want shared accounts on one device, an optional multi-user mode can be switched on; it is off by default.
 
-**Why structured annotation matters.** A detection dataset is only as trustworthy as its labels are consistent. By modeling the label space as a schema (Dataset → Class → View → Component) rather than a flat tag list, DeshiA keeps every annotator inside the same controlled vocabulary, records the exact schema version each annotation was made against, and writes a deterministic file tree — so the dataset can be regenerated, audited, and extended long after it was first labeled.
+**Why structured annotation matters.** A detection dataset is only as trustworthy as its labels are consistent. DeshiA models the label space as a **schema** instead of a flat tag list, keeps the annotator inside a controlled vocabulary, stamps every annotation with the exact schema version it was made against, and writes a deterministic file tree — so the dataset can be regenerated, audited and extended long after it was first labeled.
 
-> **Status** — `v0.1.0`, active development. First target dataset: a Bangladeshi **Rickshaw / E-Rickshaw** set (~500 images). The Rickshaw ontology is the _first_ dataset, **not** a built-in limitation — the annotation engine is schema-driven.
+> **Status** — `v0.1.0`, active development, Apache-2.0 licensed. The bundled **Rickshaw / E-Rickshaw** schema is only the first worked example (a Bangladeshi vehicle dataset of ~500 images). It ships so the app is useful on first launch and so contributors have a concrete reference. **It is not a limitation and not a requirement** — you can replace it with your own schema without changing code.
 
 ### Full CVAT-style toolset (included)
 
@@ -62,7 +62,7 @@ own annotation tool with these patterns.
 
 ## Contents
 
-- [Key features](#key-features) · [Annotation model](#annotation-model) · [Rickshaw / E-Rickshaw schema](#built-in-rickshaw--e-rickshaw-schema)
+- [Key features](#key-features) · [Annotation model](#annotation-model) · [Why Rickshaw is bundled](#why-a-rickshaw-schema-is-bundled-and-why-you-can-ignore-it)
 - [Bounding boxes & colors](#bounding-boxes--colors) · [Dataset structure & export](#dataset-structure--export)
 - [Architecture](#architecture) · [Tech stack](#tech-stack) · [Getting started](#getting-started) · [Scripts](#scripts) · [Project structure](#project-structure)
 - [Desktop builds](#building-the-desktop-app) · [Testing](#testing) · [Docs](#documentation) · [Roadmap](#roadmap) · [Contributing](#contributing) · [License](#license)
@@ -73,7 +73,7 @@ own annotation tool with these patterns.
 Everything listed here is implemented today. Planned work lives in the [Roadmap](#roadmap).
 
 | Area                          | What it does                                                                                                                                                                                                                                                      |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
 | **Workspaces**                | Point DeshiA at a read-only source folder and an output folder; it validates the paths and scaffolds the full `DeshiA_Output/` tree up front. Rename or delete workspaces — delete is DB-only, so your images and existing output are left untouched on disk.     |
 | **Source scanning**           | Recursive discovery with **SHA-256** checksums, Sharp-read dimensions/metadata, and duplicate / unsupported-format classification. Duplicates are detected by content hash, never by filename.                                                                    |
 | **Hierarchical labeling**     | Dataset → Class → View → Component, entirely resolved from the active schema. Changing the class changes the available views; changing the view changes the available components.                                                                                 |
@@ -82,7 +82,7 @@ Everything listed here is implemented today. Planned work lives in the [Roadmap]
 | **Visibility states**         | Each component can be marked `VISIBLE`, `OCCLUDED`, or `NOT_VISIBLE`; the schema decides when a box is required.                                                                                                                                                  |
 | **Privacy face mosaic**       | Hide human faces with a resizable circular tool. Each region is pixelated with a hard, **irreversible mosaic** baked into every exported copy (RAW, ANNOTATED, and visualizations) — source images are never modified, and redactions survive class/view changes. |
 | **Autosave & crash recovery** | Drafts persist continuously inside transactions; an append-only `annotation_events` log makes any interrupted session resumable to exact state.                                                                                                                   |
-| **Multi-format export**       | Submissions write Pascal VOC XML, COCO JSON (plus a dataset-level aggregate), YOLO TXT, CVAT 1.1 XML + ZIP and a native lossless project — plus clean RAW / ANNOTATED copies and a box-rendered preview, through a verified transaction. |                                                                   |
+| **Multi-format export**       | Submissions write Pascal VOC XML, COCO JSON (plus a dataset-level aggregate), YOLO TXT, CVAT 1.1 XML + ZIP and a native lossless project — plus clean RAW / ANNOTATED copies and a box-rendered preview, through a verified transaction.                          |     |
 | **Progress & inventory**      | A per-workspace dashboard with pending / in-progress / annotated / skipped counts, plus a read-only scan of what actually exists on disk, broken down by class and view.                                                                                          |
 | **Navigation**                | Dataset-order Previous / Next paging and one-click resume of the next pending image.                                                                                                                                                                              |
 | **Desktop app**               | Native folder pickers and a packaged installer (Tauri v2) that runs without a dev server. Fully offline.                                                                                                                                                          |
@@ -102,9 +102,17 @@ Dataset → Class → View / Subclass → Component → Visibility rule → Boun
 
 Annotate only **major** structural / mechanical / electrical / class-discriminative components — not decorative parts, screws, tiny lights, or individual spokes, unless a future schema explicitly configures them. See [`docs/annotation-schema.md`](docs/annotation-schema.md) for the full visibility × box-rule matrix.
 
-### Built-in Rickshaw / E-Rickshaw schema
+### Why a Rickshaw schema is bundled (and why you can ignore it)
 
-The first dataset ships in [`src/schemas/rickshaw.ts`](src/schemas/rickshaw.ts). Classes: **Rickshaw**, **E-Rickshaw**. Views: **Front**, **Side**, **Back**. Every component below is **required** except where noted.
+DeshiA grew out of a concrete research dataset: a Bangladeshi **Rickshaw / E-Rickshaw** collection. Keeping that schema in the repository gives three things:
+
+1. **A working first run** — you can open DeshiA, scan a folder and annotate immediately without authoring a schema first.
+2. **A reference implementation** — the domain rules below show how visibility, required boxes and component hierarchy are expressed as _data_, not code.
+3. **A migration example** — [`docs/geometry-and-schema.md`](docs/geometry-and-schema.md) shows how the flat Rickshaw schema maps into the general recursive label model used by the Objects editor.
+
+It is a shipped **example**, not a hard-coded ontology. The engine has no knowledge of "Rickshaw", "Chain" or "Motor"; those strings exist only in [`src/schemas/rickshaw.ts`](src/schemas/rickshaw.ts) and in the versioned schemas you author yourself. Nothing in the validation or export path depends on this particular dataset.
+
+Classes: **Rickshaw**, **E-Rickshaw**. Views: **Front**, **Side**, **Back**. Every component below is **required** except where noted.
 
 | Class      | View  | Required components                                        | Optional | Domain rule                                                              |
 | ---------- | ----- | ---------------------------------------------------------- | -------- | ------------------------------------------------------------------------ |
@@ -115,7 +123,7 @@ The first dataset ships in [`src/schemas/rickshaw.ts`](src/schemas/rickshaw.ts).
 | E-Rickshaw | Side  | E-Rickshaw Body, Electric Drive Area                       | Pedal    | The pedal is **optional** — not required when absent                     |
 | E-Rickshaw | Back  | E-Rickshaw Body, Electric Motor                            | —        |                                                                          |
 
-> Want a different dataset? Author a new `AnnotationSchema` (validated with Zod) — the engine and UI adapt with **zero** code changes. Each annotation records the `schemaId` and `schemaVersion` it was made against, so exports stay reproducible as the schema evolves.
+> Want a different dataset? Open the **Schemas** tab and author your own labels, groups, geometry types and attributes in the UI (or import a schema JSON). In the Objects editor those labels drive everything you see. You can also define a flat `AnnotationSchema` in code — it is validated with Zod and the engine adapts with **zero** code changes. Every annotation records the `schemaId` and `schemaVersion` it was made against, so exports stay reproducible as the schema evolves.
 
 ## Bounding boxes & colors
 
@@ -480,6 +488,20 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [A
 ## Security
 
 Source images are treated as read-only, imported schemas are Zod-validated, and every filesystem path is checked against traversal before a write. Found a vulnerability? See [SECURITY.md](SECURITY.md) for responsible disclosure.
+
+## Open source & extending
+
+DeshiA is **Apache-2.0 licensed** and intended to be reused, forked and adapted.
+There is no account requirement, no hosted service and no dataset lock-in:
+
+- Bring your own images or video, author your own schema, and export to standard formats.
+- Add a new shape type, exporter or workflow by following the
+  [complete build guide](docs/BUILD-ANNOTATION-TOOL.md).
+- Coding agents can load the reusable
+  [annotation-tool-builder skill](.claude/skills/annotation-tool-builder/SKILL.md)
+  to apply the same patterns in another project.
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+  before opening a pull request.
 
 ## License
 
