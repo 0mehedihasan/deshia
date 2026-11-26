@@ -7,6 +7,11 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
     exclude: ['node_modules', 'e2e', 'src-tauri'],
+    // Native modules (better-sqlite3) can crash a Vitest worker thread on
+    // constrained CI runners. Forks with a small pool are slower but stable.
+    pool: 'forks',
+    minWorkers: 1,
+    maxWorkers: 2,
     coverage: {
       provider: 'v8',
       include: ['src/core/**', 'src/schemas/**', 'src/utils/**'],
